@@ -1,0 +1,16 @@
+# IO-106 AWS Network Architecture -- per-student variables.
+# Copy to terraform.tfvars and set your assigned student id.
+
+student_id = "s01"
+region     = "us-east-1"
+
+# scenario controls which lab state to deploy. Leave as "healthy" for Lab 0;
+# your instructor / lab guide tells you when to switch to lab1..lab4.
+scenario = "healthy"
+
+# Defaults below rarely need changing in class:
+# transit_cidr  = "10.106.0.0/24"
+# spoke_a_cidr  = "10.106.1.0/24"
+# spoke_b_cidr  = "10.106.2.0/24"
+# instance_type = "t3.micro"
+# tags          = {}
