@@ -97,10 +97,15 @@ fi
 
 # 4. spoke_a -> spoke_b reachable (ping over the TGW)
 PING_OUT=$(ssm_run "$A_ID" "ping -c 3 -W 2 $B_IP >/dev/null 2>&1 && echo REACHABLE || echo UNREACHABLE")
-if echo "$PING_OUT" | grep -q REACHABLE; then
+# NOTE: test UNREACHABLE first -- the string "UNREACHABLE" contains "REACHABLE",
+# so a bare `grep -q REACHABLE` matches both and reports a false PASS when the
+# link is actually down (this masked the Lab 4 fault during live testing).
+if echo "$PING_OUT" | grep -q UNREACHABLE; then
+  fail "spoke_a -> spoke_b ($B_IP) UNREACHABLE (route or SG -- see Lab 1 / Lab 4)"
+elif echo "$PING_OUT" | grep -q REACHABLE; then
   pass "spoke_a -> spoke_b ($B_IP) reachable over the TGW"
 else
-  fail "spoke_a -> spoke_b ($B_IP) UNREACHABLE (route or SG -- see Lab 1 / Lab 4)"
+  fail "spoke_a -> spoke_b ($B_IP) ping check inconclusive (no marker returned -- re-run)"
 fi
 
 # 5. app.lab.internal resolves privately from spoke_a (Route53 private zone)

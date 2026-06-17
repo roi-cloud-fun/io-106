@@ -1,10 +1,29 @@
-# IO-106 Lab Environment — AWS-Native Network, One Stack, Five States
+# IO-106 — AWS Network Architecture and Cross-Account Access
 
-Each of ~8 students deploys their own AWS-native network stack (prefix
-`io106-<student_id>-` on every named resource) and uses it to practice transit
-routing, cross-account role assumption, private connectivity, and network
-troubleshooting. A single `var.scenario` switches the stack between a healthy
-baseline and four fault states the student diagnoses and fixes.
+Monorepo for ROI Training's IO-106 course. **Contains everything you need to stand up and run the labs end-to-end:** the per-student Terraform environment, the step-by-step lab guides, and the instructor answer key.
+
+Each of ~8 students deploys their own AWS-native network stack (prefix `io106-<student_id>-` on every named resource) and uses it to practice transit routing, cross-account role assumption, permission guardrails, private connectivity, and network troubleshooting. A single `var.scenario` switches the stack between a healthy baseline and four fault states the student diagnoses and fixes.
+
+## What's where
+
+```
+io-106/
+├── instructor/
+│   └── scenarios.md                  Answer key: per-scenario symptom → diagnosis → exact fix.
+│                                      Do NOT ship this to students — exclude it from the deploy-box clone.
+├── lab_environment/
+│   └── lab_env_student/              The whole network stack — one `terraform apply` provisions it.
+│       ├── network.tf  iam.tf  endpoints.tf  security_groups.tf  flowlogs.tf  instances.tf …
+│       ├── variables.tf              student_id, region, scenario
+│       ├── verify.sh                 Lab 0 PASS/FAIL health check
+│       └── terraform.tfvars.example  Copy to terraform.tfvars and fill in
+│
+├── lab_0/README.md   Deploy Your Network Stack (baseline + verify)
+├── lab_1/README.md   Hub-Spoke Transit and Segmentation (TGW routing fault)
+├── lab_2/README.md   Cross-Account Access and Permission Guardrails (permissions-boundary fault)
+├── lab_3/README.md   Private Connectivity — Endpoints and DNS (Route53 zone-association fault)
+└── lab_4/README.md   Network Troubleshooting capstone (compound SG + route fault)
+```
 
 > ### Aviatrix disclaimer (read this first — it frames the whole lab)
 > **In this lab we use AWS Transit Gateway. In your environment this
@@ -32,37 +51,17 @@ baseline and four fault states the student diagnoses and fixes.
 
    VPC Flow Logs (all 3 VPCs) → CloudWatch Logs
    IAM: network-operations (read-only cross-account-style) + app role
-   Security groups ONLY — no NACLs (matches [Client])
+   Security groups ONLY — no NACLs (matches SYF)
 ```
 
-Fully private: **no IGW, no NAT.** The instances reach Systems Manager and AWS
-services through **interface VPC endpoints** — a deliberate cost and teaching
-choice (PrivateLink instead of NAT). No SSH, no key pairs; all instance access
-is via SSM Session Manager / Run Command.
+Fully private: **no IGW, no NAT.** The instances reach Systems Manager and AWS services through **interface VPC endpoints** — a deliberate cost and teaching choice (PrivateLink instead of NAT). No SSH, no key pairs; all instance access is via SSM Session Manager / Run Command.
 
-## Layout
+## How students run it
 
-| Path | Who runs it | What |
-|------|-------------|------|
-| `lab_env_student/` | Each student | The whole network stack (one `terraform apply`) |
-| `lab_env_student/verify.sh` | Each student (Lab 0) | PASS/FAIL health verification of the healthy baseline |
-| `scenarios/README.md` | Instructor | Answer key: per-scenario symptom → diagnosis → exact fix |
-
-## Prerequisites
-
-- Terraform >= 1.10
-- AWS CLI v2 (authenticated to the training account)
-- `session-manager-plugin` (for SSM Session Manager / `verify.sh` connectivity tests)
-- AWS CloudShell works for all of the above (install Terraform + the SSM plugin).
-
-> Clone to local disk or run in CloudShell — **not** a Google Drive / OneDrive
-> synced folder. A cloud-sync client touching `.tfstate` mid-apply can corrupt
-> state.
-
-## Student flow
+Students work from a per-student **EC2 deploy instance** (`io106-<student_id>-deploy`), reached over SSM Session Manager — no laptops, no CloudShell. This repo is pre-cloned on that box at `~/io-106`, with Terraform, AWS CLI v2, `session-manager-plugin`, `git`, and `jq` preinstalled. The per-lab guides (`lab_0/`…`lab_4/`) walk through everything; the short version:
 
 ```bash
-cd lab_env_student
+cd ~/io-106/lab_environment/lab_env_student
 terraform init
 terraform apply -var student_id=s01        # scenario defaults to "healthy"  (~5-8 min)
 ./verify.sh                                 # Lab 0: PASS/FAIL on every component
@@ -72,19 +71,15 @@ Then, per the lab guides, switch scenarios to diagnose and fix each fault:
 
 ```bash
 terraform apply -var student_id=s01 -var scenario=lab1   # spoke A -> spoke B broken
-# ...diagnose with Reachability Analyzer + Flow Logs, then fix the Terraform...
+# ...diagnose, then fix the Terraform...
 terraform apply -var student_id=s01 -var scenario=healthy # reset / confirm fix
 ```
 
 Notes:
 
-- `student_id` is lowercase alphanumeric, 2-12 chars (s01 … s08). It prefixes
-  every named resource so 8 students share one account without collisions.
-- Instances take ~2-3 min after apply to register with SSM. If `verify.sh`
-  SSM checks FAIL on the first run, wait and re-run.
-- The four scenarios and their exact faults/fixes are documented for
-  instructors in `scenarios/README.md`. **Lab guides are delivered
-  separately** — this directory is the deployable environment only.
+- `student_id` is lowercase alphanumeric, 2-12 chars (s01 … s08). It prefixes every named resource so 8 students share one account without collisions.
+- Instances take ~2-3 min after apply to register with SSM. If `verify.sh` SSM checks FAIL on the first run, wait and re-run.
+- The four scenarios and their exact faults/fixes are documented for instructors in `instructor/scenarios.md`.
 
 ## The five states
 
@@ -92,23 +87,20 @@ Notes:
 |------------|-------|-------------------|
 | `healthy` | Everything works (Lab 0 baseline) | Full topology + verify |
 | `lab1` | spoke_a → spoke_b broken (missing VPC route via TGW) | TGW routing + segmentation |
-| `lab2` | network-operations role AssumeRole denied (bad trust principal) | Cross-account trust policies |
+| `lab2` | network-operations role can be assumed and `describe` works, but Reachability Analyzer is denied | Permission guardrails: a **permissions boundary** caps the role below its policy (single-account stand-in for an **SCP**) |
 | `lab3` | spoke_a can't resolve `lab.internal` (zone not associated) | PrivateLink + Route53 private DNS |
 | `lab4` | compound: spoke_b SG rule + spoke_b return route missing | Flow Logs + Reachability Analyzer capstone |
 
-Each non-healthy state injects exactly one realistic fault into a real
-resource (lab4 is a deliberate two-fault compound). See `scenarios/README.md`.
+Each non-healthy state injects exactly one realistic fault into a real resource (lab4 is a deliberate two-fault compound). See `instructor/scenarios.md`.
 
 ## Teardown
 
 ```bash
-cd lab_env_student
+cd ~/io-106/lab_environment/lab_env_student
 terraform destroy -var student_id=s01      # ~5-8 min; nothing blocks here (no NAT/ENI churn)
 ```
 
-There is no in-cluster machinery to uninstall first (unlike IO-108) — the
-stack is pure networking, so a single `destroy` is clean. If `destroy` ever
-hangs on a subnet, look for a leftover interface-endpoint ENI in that VPC.
+There is no in-cluster machinery to uninstall first (unlike IO-108) — the stack is pure networking, so a single `destroy` is clean. If `destroy` ever hangs on a subnet, look for a leftover interface-endpoint ENI in that VPC.
 
 ## Cost (us-east-1 list prices, approximate)
 
@@ -124,12 +116,12 @@ Per student, ~8 hr running:
 | **Per student** | | **~$2.05/day** |
 | **8 students** | | **~$16.40/day** |
 
-The choice to use interface endpoints instead of a NAT gateway trades ~$0.56/day
-of endpoints for ~$1.10/day of NAT (and teaches PrivateLink). Destroy stacks at
-end of day; rebuild is one `terraform apply`.
+(A per-student EC2 deploy box adds one more small instance per student.) Destroy stacks at end of day; rebuild is one `terraform apply`.
 
-> **Not yet deployed live.** This stack is `terraform validate`-clean for all
-> scenarios. It has not been applied against a real account at the time of
-> writing — first apply should be a smoke test (see "Open items" in the
-> handoff notes). The IO-108 sibling stack proved the per-student prefix +
-> verify.sh pattern end-to-end.
+## Status
+
+**Deployed and live-tested 2026-06-17** against a real training account (76 resources, clean apply + destroy). All five scenarios were exercised end-to-end:
+
+- `healthy`, `lab1`, `lab3`, `lab4` — verified (lab4 connectivity fault confirmed via raw ICMP loss).
+- `lab2` — rebuilt as the permissions-boundary fault (the original "wrong-account trust" fault is rejected by AWS at apply time) and verified: healthy = Reachability Analyzer allowed, lab2 = denied, toggle clean both ways.
+- `verify.sh` reachability check fixed (it previously reported a false "reachable").
