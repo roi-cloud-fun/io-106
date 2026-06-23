@@ -225,16 +225,24 @@ The failure mode is identical; only the management plane differs. In production 
 
 **Question 1:** Reachability Analyzer returned "Not reachable - no route to destination in the source route table," and Flow Logs showed no REJECT on spoke B's interface. Why do those two observations together rule out a security group as the cause?
 
+<details><summary>Answer</summary>
+
 > **Answer:** A security group only acts on packets that actually arrive at an interface. If the source VPC route table has no route to the destination CIDR, the packet is dropped at the source before it is ever forwarded to the TGW - it never reaches spoke B's ENI, so no security group is ever evaluated and no REJECT can appear. Reachability Analyzer naming the *source route table* (not an SG) plus the absence of any REJECT on the destination both point to routing, upstream of any firewall decision.
+</details>
 
 **Question 2:** You fixed the fault by editing `count` to `1` and running `terraform apply -var scenario=lab1` - leaving the lab1 scenario active. Why is that a stronger demonstration of the fix than simply running `terraform apply -var scenario=healthy`?
 
+<details><summary>Answer</summary>
+
 > **Answer:** `scenario=healthy` resets every guarded resource at once, so it would mask whether you understood the specific fault. Editing the resource and applying with `scenario=lab1` still set proves the route now exists independently of the scenario toggle - you repaired the actual configuration, which is what you would do in production where there is no "healthy" switch to fall back on.
+</details>
 
 **Question 3:** This lab only broke spoke A's outbound route to spoke B. In a real hub-and-spoke, why would you still check the return path (spoke B back to spoke A) before declaring connectivity fully restored?
 
-> **Answer:** Transit routing is directional - each spoke's route table must independently carry a route to the other's CIDR via the hub. A working forward route does not imply a working return route; ICMP echo replies (or TCP ACKs) need spoke B to have a route back to `10.106.1.0/24`. In this lab the return route was intact, so ping succeeded - but Lab 4 deliberately breaks a return route to make exactly this point.
+<details><summary>Answer</summary>
 
+> **Answer:** Transit routing is directional - each spoke's route table must independently carry a route to the other's CIDR via the hub. A working forward route does not imply a working return route; ICMP echo replies (or TCP ACKs) need spoke B to have a route back to `10.106.1.0/24`. In this lab the return route was intact, so ping succeeded - but Lab 4 deliberately breaks a return route to make exactly this point.
+</details>
 ---
 
 ## Summary
