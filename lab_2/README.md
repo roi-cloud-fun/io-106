@@ -258,16 +258,24 @@ The troubleshooting method is identical regardless of which guardrail is in play
 
 **Question 1:** You assumed the role successfully and `ec2:DescribeRouteTables` worked, but `ec2:CreateNetworkInsightsPath` was denied - and the role's permissions policy clearly grants `ec2:CreateNetworkInsightsPath`. What does that combination tell you about where the denial comes from, before you look at anything else?
 
+<details><summary>Answer</summary>
+
 > **Answer:** If you could assume the role, the trust policy is fine. If a `describe` worked, your credentials and the role's basic policy are fine. So a denial on one specific action that the role's policy *does* grant cannot be coming from the identity policy - it must come from a layer that further restricts the role: a **permissions boundary** (or, in an org, an **SCP**). Effective permissions are the *intersection* of the identity policy and every guardrail above it, so an action must be allowed in *all* layers to succeed.
+</details>
 
 **Question 2:** A colleague "fixes" the AccessDenied by editing the boundary to `"Action": "*"`. Why is that the wrong remediation, and what is the correct one?
 
+<details><summary>Answer</summary>
+    
 > **Answer:** `"Action": "*"` removes the ceiling entirely - the boundary (or SCP) exists on purpose to cap what the role can ever do, and blowing it open defeats that control for every action, not just the one you needed. The correct fix is to make the role no longer subject to a boundary that does not belong on it (detach it), or to allow the *specific* legitimate actions in the guardrail. You restore the intended control surface; you do not delete it.
+</details>
 
 **Question 3:** In SYF's real multi-account organization, you hit the same symptom - an action allowed by a role's policy is denied. You confirm there is no permissions boundary on the role. Where do you look next, and why is the method the same as in this lab?
 
+<details><summary>Answer</summary>
+    
 > **Answer:** You look at the **SCPs** applied to the account's Organization/OU. SCPs are a guardrail above every role in the account, exactly like a permissions boundary is a guardrail on a single role - effective permission is still the intersection of the identity policy and every guardrail. The method is unchanged: prove the identity policy allows the action, then walk up the guardrail layers until you find the one that does not. The permissions boundary in this lab is the single-account stand-in for that SCP layer.
-
+</details>
 ---
 
 ## Summary
