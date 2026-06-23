@@ -175,7 +175,7 @@ This is the core skill: when an action is denied but you believe it should be al
     ```
 <!-- source: facts_extracted_v2.md §"Service Control Policies" -->
 
-**Expected Result:** `get-role` shows a `PermissionsBoundary` is attached (its ARN ends `-netops-boundary`). Reading the boundary, its allowed actions include `ec2:Describe*`, `ec2:SearchTransitGatewayRoutes`, logs, route53, and so on - **but none of the `ec2:*NetworkInsights*` actions**. A role's effective permissions are the **intersection** of its identity policy and its boundary. Reachability Analyzer is in the policy but not in the boundary, so it is capped out. Diagnosis complete: the denial is the permissions boundary, not the role policy. *(In SYF's production org, you would run the same comparison against the OU's SCP instead of a boundary.)*
+**Expected Result:** `get-role` shows a `PermissionsBoundary` is attached (its ARN ends `-netops-boundary`). Reading the boundary, its allowed actions include `ec2:Describe*`, `ec2:SearchTransitGatewayRoutes`, logs, Route 53, and so on - **but none of the `ec2:*NetworkInsights*` actions**. A role's effective permissions are the **intersection** of its identity policy and its boundary. Reachability Analyzer is in the policy but not in the boundary, so it is capped out. Diagnosis complete: the denial is the permissions boundary, not the role policy. *(In SYF's production org, you would run the same comparison against the OU's SCP instead of a boundary.)*
 
 ---
 
@@ -245,7 +245,7 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
 
 | In this single-account lab | In SYF's real environment |
 |---|---|
-| The guardrail above the role is a **permissions boundary** | The guardrail is typically a **Service Control Policy (SCP)** on the account's **Organization / OU** |
+| The guardrail above the role is a **permissions boundary** | The guardrail is typically a **Service Control Policy (SCP)** on the account's **Organization/OU** |
 | You read the boundary with `iam get-role` / `get-policy-version` | You read the SCP in the **Organizations** console (or request it from the platform team) |
 | You detach the boundary in Terraform | The SCP change is requested and approved through **ServiceNow**, governed by the **SIAM** process |
 | Effective permission = identity policy AND boundary | Effective permission = identity policy AND **every** SCP on the path AND any boundary |
@@ -285,7 +285,7 @@ You assumed the network-operations role and ran Reachability Analyzer successful
 
 ## Next Steps
 
-In **Lab 3: Private Connectivity - Endpoints and DNS**, you return to the data plane: a Route53 private hosted zone that one spoke can no longer resolve. You will diagnose the NXDOMAIN, find the missing zone association, and repair it - the private DNS pattern behind SYF's centralized endpoint and Route53 model.
+In **Lab 3: Private Connectivity - Endpoints and DNS**, you return to the data plane: a Route 53 private hosted zone that one spoke can no longer resolve. You will diagnose the NXDOMAIN, find the missing zone association, and repair it - the private DNS pattern behind SYF's centralized endpoint and Route 53 model.
 
 ---
 
