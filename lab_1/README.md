@@ -13,17 +13,17 @@
 
 ## Lab Overview
 
-A hub-and-spoke transit only works if both sides of a path have a route to each other through the hub. When one direction's route is missing, the symptom looks like a firewall problem but is really a routing problem - and the two are diagnosed with different tools. In this lab you inject exactly that fault, then use **VPC Reachability Analyzer** to prove it is a routing gap (not a security group), corroborate with **VPC Flow Logs**, and repair the route by editing Terraform.
+A hub-and-spoke transit only works if both sides of a path have a route to each other through the hub. When one direction's route is missing, the symptom looks like a firewall problem but is really a routing problem — and the two are diagnosed with different tools. In this lab you inject exactly that fault, then use **VPC Reachability Analyzer** to prove it is a routing gap (not a security group), corroborate with **VPC Flow Logs**, and repair the route by editing Terraform.
 
 The fault: `scenario=lab1` removes spoke A's VPC route to spoke B's CIDR (`10.106.2.0/24`) via the Transit Gateway. Spoke A's packets to spoke B have nowhere to go, so they never even reach the hub. You will restore that one route.
 
-> **Aviatrix note:** This lab uses AWS Transit Gateway. In your environment the hub-and-spoke transit is **Aviatrix** (Aviatrix Transit Gateway / Spoke Gateways), managed by the network team - the concepts map directly; the management plane differs. The spoke VPC route table you repair here is the AWS substrate that the **Aviatrix Controller** programs centrally as a segmentation/route policy. Doing it by hand is what makes the failure visible; in production you would adjust the policy in the Controller, not edit a route table directly.
+> **Aviatrix note:** This lab uses AWS Transit Gateway. In your environment the hub-and-spoke transit is **Aviatrix** (Aviatrix Transit Gateway / Spoke Gateways), managed by the network team — the concepts map directly; the management plane differs. The spoke VPC route table you repair here is the AWS substrate that the **Aviatrix Controller** programs centrally as a segmentation/route policy. Doing it by hand is what makes the failure visible; in production you would adjust the policy in the Controller, not edit a route table directly.
 
 ---
 
 ## Scenario
 
-A developer reports that an application in spoke A can no longer reach a service in spoke B - connections "just hang." Nothing was deployed to either instance, so the application team suspects the network. You own the transit layer. Your job is to prove where the packet dies, name the exact resource at fault, fix it as code, and confirm the path is restored - the same loop you would run against the Aviatrix overlay in production, except here you can see every primitive.
+A developer reports that an application in spoke A can no longer reach a service in spoke B — connections "just hang." Nothing was deployed to either instance, so the application team suspects the network. You own the transit layer. Your job is to prove where the packet dies, name the exact resource at fault, fix it as code, and confirm the path is restored - the same loop you would run against the Aviatrix overlay in production, except here you can see every primitive.
 
 ---
 
@@ -54,7 +54,7 @@ By the end of this lab, you will:
 
 ## Task 2: Inject the Fault
 
-2. **Apply** the lab1 scenario. This toggles exactly one real resource - spoke A's route to spoke B - off:
+2. **Apply** the lab1 scenario. This toggles exactly one real resource — spoke A's route to spoke B — off:
 
     ```bash
     terraform apply -var scenario=lab1
@@ -99,7 +99,7 @@ By the end of this lab, you will:
 
 ## Task 4: Diagnose with Reachability Analyzer
 
-Reachability Analyzer evaluates the *configured* path - routes, security groups, attachments - without sending a packet, and tells you the first hop that blocks it. It is the fastest way to separate "no route" from "blocked by SG."
+Reachability Analyzer evaluates the *configured* path - routes, security groups, attachments — without sending a packet, and tells you the first hop that blocks it. It is the fastest way to separate "no route" from "blocked by SG."
 
 6. **Open** the AWS console and navigate to **VPC > Reachability Analyzer**.
 
@@ -110,7 +110,7 @@ Reachability Analyzer evaluates the *configured* path - routes, security groups,
 
 8. **Click** **Create and analyze path** and wait for the analysis to complete (a few seconds to a minute).
 
-**Expected Result:** The path returns **Not reachable**. The explanation identifies the break as **no route to the destination in the source VPC route table** - the analyzer points at spoke A's route table, not at any security group. That distinction is the whole diagnosis: a security-group fault would show the packet reaching spoke B's ENI and being rejected there; here it never leaves spoke A.
+**Expected Result:** The path returns **Not reachable**. The explanation identifies the break as **no route to the destination in the source VPC route table** — the analyzer points at spoke A's route table, not at any security group. That distinction is the whole diagnosis: a security-group fault would show the packet reaching spoke B's ENI and being rejected there; here it never leaves spoke A.
 
 ---
 
@@ -139,7 +139,7 @@ A good engineer confirms the tool's verdict against the resource itself.
     | limit 20
     ```
 
-    Because spoke A has no route to `10.106.2.0/24`, the packets are dropped before egress - you will see spoke A's attempts with no corresponding ACCEPT on spoke B's interface. (Contrast this with Lab 4, where a security group produces explicit REJECT records on the destination ENI.)
+    Because spoke A has no route to `10.106.2.0/24`, the packets are dropped before egress — you will see spoke A's attempts with no corresponding ACCEPT on spoke B's interface. (Contrast this with Lab 4, where a security group produces explicit REJECT records on the destination ENI.)
 
 **Expected Result:** Spoke A's route table is missing the `10.106.2.0/24 -> tgw-...` route. Reachability Analyzer, the route table, and Flow Logs now agree: this is a routing gap on the source side, not a firewall issue.
 
@@ -147,7 +147,7 @@ A good engineer confirms the tool's verdict against the resource itself.
 
 ## Task 6: Fix It in Terraform
 
-The route is defined in `network.tf` as `aws_route.spoke_a_to_spoke_b`, guarded by `count = local.is_lab1 ? 0 : 1`. Under `scenario=lab1` that guard is `0`, so the route does not exist. You will repair the resource so the route exists **regardless of scenario** - that proves you fixed the network, not just flipped the switch back.
+The route is defined in `network.tf` as `aws_route.spoke_a_to_spoke_b`, guarded by `count = local.is_lab1 ? 0 : 1`. Under `scenario=lab1` that guard is `0`, so the route does not exist. You will repair the resource so the route exists **regardless of scenario** — that proves you fixed the network, not just flipped the switch back.
 
 11. **Edit** `network.tf`. Find the `aws_route "spoke_a_to_spoke_b"` block and change its count from the guard to a constant `1`:
 
@@ -163,14 +163,14 @@ The route is defined in `network.tf` as `aws_route.spoke_a_to_spoke_b`, guarded 
     }
     ```
 
-12. **Preview** the fix with the scenario still set to lab1 - this is the key step that demonstrates the repair:
+12. **Preview** the fix with the scenario still set to lab1 — this is the key step that demonstrates the repair:
 
     ```bash
     terraform plan -var scenario=lab1
     ```
     <!-- source: facts_extracted_v2.md §"Transit Gateway" -->
 
-    The plan should show `1 to add` - Terraform will create the route even though `scenario=lab1`, because your edit no longer lets the guard delete it.
+    The plan should show `1 to add` — Terraform will create the route even though `scenario=lab1`, because your edit no longer lets the guard delete it.
 
 13. **Apply** the fix:
 
@@ -179,7 +179,7 @@ The route is defined in `network.tf` as `aws_route.spoke_a_to_spoke_b`, guarded 
     ```
     <!-- source: facts_extracted_v2.md §"Transit Gateway" -->
 
-> **Note:** The fast reset is `terraform apply -var scenario=healthy`, which also restores the route. The point of editing the resource is to practice the real workflow - in production you repair the configuration, you do not have a "make it healthy" switch.
+> **Note:** The fast reset is `terraform apply -var scenario=healthy`, which also restores the route. The point of editing the resource is to practice the real workflow — in production you repair the configuration, you do not have a "make it healthy" switch.
 
 **Expected Result:** Apply completes with `1 added`. Spoke A's route table now contains `10.106.2.0/24 -> tgw-...`.
 
@@ -187,7 +187,7 @@ The route is defined in `network.tf` as `aws_route.spoke_a_to_spoke_b`, guarded 
 
 ## Task 7: Re-Verify
 
-14. **Re-run** Reachability Analyzer (Task 4) - or just re-test from the instance:
+14. **Re-run** Reachability Analyzer (Task 4) — or just re-test from the instance:
 
     ```bash
     aws ssm start-session --target "$A_ID"
@@ -217,31 +217,31 @@ The route is defined in `network.tf` as `aws_route.spoke_a_to_spoke_b`, guarded 
 | Spoke A VPC route table entry to spoke B | A route/segmentation policy the Aviatrix Controller programs centrally |
 | Manually adding the missing route | Adjusting the segmentation policy in the Aviatrix Controller |
 
-The failure mode is identical; only the management plane differs. In production you would not edit a route table by hand - you would see the gap in the Controller's policy and fix it there - but knowing what the underlying route must look like is exactly what lets you tell the network team precisely what is wrong.
+The failure mode is identical; only the management plane differs. In production you would not edit a route table by hand - you would see the gap in the Controller's policy and fix it there — but knowing what the underlying route must look like is exactly what lets you tell the network team precisely what is wrong.
 
 ---
 
 ## Knowledge Check
 
-**Question 1:** Reachability Analyzer returned "Not reachable - no route to destination in the source route table," and Flow Logs showed no REJECT on spoke B's interface. Why do those two observations together rule out a security group as the cause?
+**Question 1:** Reachability Analyzer returned "Not reachable — no route to destination in the source route table," and Flow Logs showed no REJECT on spoke B's interface. Why do those two observations together rule out a security group as the cause?
 
 <details><summary>Answer</summary>
 
-> **Answer:** A security group only acts on packets that actually arrive at an interface. If the source VPC route table has no route to the destination CIDR, the packet is dropped at the source before it is ever forwarded to the TGW - it never reaches spoke B's ENI, so no security group is ever evaluated and no REJECT can appear. Reachability Analyzer naming the *source route table* (not an SG) plus the absence of any REJECT on the destination both point to routing, upstream of any firewall decision.
+> **Answer:** A security group only acts on packets that actually arrive at an interface. If the source VPC route table has no route to the destination CIDR, the packet is dropped at the source before it is ever forwarded to the TGW — it never reaches spoke B's ENI, so no security group is ever evaluated and no REJECT can appear. Reachability Analyzer naming the *source route table* (not an SG) plus the absence of any REJECT on the destination both point to routing, upstream of any firewall decision.
 </details>
 
-**Question 2:** You fixed the fault by editing `count` to `1` and running `terraform apply -var scenario=lab1` - leaving the lab1 scenario active. Why is that a stronger demonstration of the fix than simply running `terraform apply -var scenario=healthy`?
+**Question 2:** You fixed the fault by editing `count` to `1` and running `terraform apply -var scenario=lab1` — leaving the lab1 scenario active. Why is that a stronger demonstration of the fix than simply running `terraform apply -var scenario=healthy`?
 
 <details><summary>Answer</summary>
 
-> **Answer:** `scenario=healthy` resets every guarded resource at once, so it would mask whether you understood the specific fault. Editing the resource and applying with `scenario=lab1` still set proves the route now exists independently of the scenario toggle - you repaired the actual configuration, which is what you would do in production where there is no "healthy" switch to fall back on.
+> **Answer:** `scenario=healthy` resets every guarded resource at once, so it would mask whether you understood the specific fault. Editing the resource and applying with `scenario=lab1` still set proves the route now exists independently of the scenario toggle — you repaired the actual configuration, which is what you would do in production where there is no "healthy" switch to fall back on.
 </details>
 
 **Question 3:** This lab only broke spoke A's outbound route to spoke B. In a real hub-and-spoke, why would you still check the return path (spoke B back to spoke A) before declaring connectivity fully restored?
 
 <details><summary>Answer</summary>
 
-> **Answer:** Transit routing is directional - each spoke's route table must independently carry a route to the other's CIDR via the hub. A working forward route does not imply a working return route; ICMP echo replies (or TCP ACKs) need spoke B to have a route back to `10.106.1.0/24`. In this lab the return route was intact, so ping succeeded - but Lab 4 deliberately breaks a return route to make exactly this point.
+> **Answer:** Transit routing is directional — each spoke's route table must independently carry a route to the other's CIDR via the hub. A working forward route does not imply a working return route; ICMP echo replies (or TCP ACKs) need spoke B to have a route back to `10.106.1.0/24`. In this lab the return route was intact, so ping succeeded - but Lab 4 deliberately breaks a return route to make exactly this point.
 </details>
 ---
 
@@ -260,7 +260,7 @@ You injected a single routing fault, proved with Reachability Analyzer that it w
 
 ## Next Steps
 
-In **Lab 2: Cross-Account Access Patterns**, you move from the data plane to the access plane: a `network-operations` role whose trust policy has been pointed at the wrong account. You will diagnose the `AccessDenied` with CloudTrail, read the trust policy, and repair it - the cross-account pattern behind SYF's read-only network visibility role.
+In **Lab 2: Cross-Account Access Patterns**, you move from the data plane to the access plane: a `network-operations` role whose trust policy has been pointed at the wrong account. You will diagnose the `AccessDenied` with CloudTrail, read the trust policy, and repair it — the cross-account pattern behind SYF's read-only network visibility role.
 
 ---
 
