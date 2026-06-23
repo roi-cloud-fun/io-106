@@ -1,4 +1,4 @@
-# Lab 3: Private Connectivity - Endpoints and DNS
+# Lab 3: Private Connectivity — Endpoints and DNS
 
 | | |
 |---|---|
