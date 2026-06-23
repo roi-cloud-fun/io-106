@@ -15,15 +15,15 @@
 
 In Lab 0 you deployed a fully private, three-VPC network: a Transit/shared VPC and two spokes, all joined by an AWS Transit Gateway, with no internet gateway and no NAT. The instances reach AWS services through **interface VPC endpoints**, and an application name resolves through a **Route 53 private hosted zone** (`lab.internal`). That private-DNS-over-PrivateLink pattern is exactly how SYF exposes shared AWS services from its central endpoint account.
 
-In this lab you will switch your stack into a fault state where one spoke loses its view of the private DNS zone, diagnose the failure with Systems Manager Session Manager and the Route 53 console, then fix it the way SYF fixes everything - **in Terraform** - and re-verify.
+In this lab you will switch your stack into a fault state where one spoke loses its view of the private DNS zone, diagnose the failure with Systems Manager Session Manager and the Route 53 console, then fix it the way SYF fixes everything — **in Terraform** — and re-verify.
 
-> **Aviatrix disclaimer.** This lab uses AWS Transit Gateway. In your environment the hub-and-spoke transit is **Aviatrix** (Aviatrix Transit Gateway / Spoke Gateways), managed by the network team - the concepts map directly; the management plane differs. The interface endpoints and Route 53 private zone you work with here are AWS-native primitives that ride underneath the Aviatrix overlay either way.
+> **Aviatrix disclaimer.** This lab uses AWS Transit Gateway. In your environment the hub-and-spoke transit is **Aviatrix** (Aviatrix Transit Gateway / Spoke Gateways), managed by the network team — the concepts map directly; the management plane differs. The interface endpoints and Route 53 private zone you work with here are AWS-native primitives that ride underneath the Aviatrix overlay either way.
 
 ---
 
 ## Scenario
 
-A developer reports that an application on **spoke A** can no longer reach a shared service by name: `app.lab.internal` "doesn't resolve." From **spoke B**, the same name resolves fine. The instances are healthy, Session Manager works, and nothing else has changed. Your job is to prove where DNS resolution breaks, identify the exact resource at fault, and restore it through Terraform - not a console click that drifts away from the source of truth.
+A developer reports that an application on **spoke A** can no longer reach a shared service by name: `app.lab.internal` "doesn't resolve." From **spoke B**, the same name resolves fine. The instances are healthy, Session Manager works, and nothing else has changed. Your job is to prove where DNS resolution breaks, identify the exact resource at fault, and restore it through Terraform — not a console click that drifts away from the source of truth.
 
 This mirrors a real SYF failure mode: a VPC silently missing its association to a centrally managed Route 53 private hosted zone. The zone is fine; the *scope* of the zone is wrong.
 
@@ -45,11 +45,11 @@ By the end of this lab, you will be able to:
 
 Before you break anything, anchor the healthy design. Three pieces in your stack carry this lab:
 
-1. **Interface VPC endpoints (PrivateLink).** Each spoke has the SSM trio (`ssm`, `ec2messages`, `ssmmessages`) as interface endpoints with private DNS enabled. That is why your instances are manageable over Session Manager with no NAT and no internet gateway. The Transit VPC additionally hosts a **shared STS interface endpoint** - the teachable stand-in for SYF's central endpoint account, where one account owns the endpoints and shares private access to the spokes.
+1. **Interface VPC endpoints (PrivateLink).** Each spoke has the SSM trio (`ssm`, `ec2messages`, `ssmmessages`) as interface endpoints with private DNS enabled. That is why your instances are manageable over Session Manager with no NAT and no internet gateway. The Transit VPC additionally hosts a **shared STS interface endpoint** — the teachable stand-in for SYF's central endpoint account, where one account owns the endpoints and shares private access to the spokes.
 
 2. **Route 53 private hosted zone `lab.internal`.** It holds an `A` record, `app.lab.internal`, pointing at the spoke A instance's private IP. A private hosted zone only answers queries from VPCs it is **associated** to. Association is the gate.
 
-3. **Transit Gateway.** Carries the cross-VPC traffic once a name resolves to an IP. Routing is healthy in this lab - the fault is purely DNS scope.
+3. **Transit Gateway.** Carries the cross-VPC traffic once a name resolves to an IP. Routing is healthy in this lab — the fault is purely DNS scope.
 
 In Terraform, the zone and its associations are deliberately separate resources so an association can be dropped without touching the zone:
 
@@ -81,7 +81,7 @@ That `count = local.is_lab3 ? 0 : 1` is the entire fault. `local.is_lab3` is `tr
     cd ~/io-106/lab_environment/lab_env_student
     ```
 
-2. **Capture** the outputs you will need into shell variables. These read from local Terraform state - no AWS call - so they work in any state:
+2. **Capture** the outputs you will need into shell variables. These read from local Terraform state — no AWS call — so they work in any state:
 
     ```bash
     A_ID=$(terraform output -raw spoke_a_instance_id)
@@ -123,7 +123,7 @@ That `count = local.is_lab3 ? 0 : 1` is the entire fault. `local.is_lab3` is `tr
 
 ## Task 3: Reproduce the Symptom from Spoke A
 
-5. **Start** a Session Manager shell on the spoke A instance (no SSH, no key pair - this is the only access path in a no-IGW/no-NAT design):
+5. **Start** a Session Manager shell on the spoke A instance (no SSH, no key pair — this is the only access path in a no-IGW/no-NAT design):
 
     ```bash
     aws ssm start-session --target "$A_ID" --region "$REGION"
@@ -145,7 +145,7 @@ That `count = local.is_lab3 ? 0 : 1` is the entire fault. `local.is_lab3` is `tr
 7. **Confirm the instance itself is otherwise healthy** - this rules out a broken resolver or a dead endpoint. From the same session:
 
     ```bash
-    getent hosts ssm.${AWS_REGION:-us-east-1}.amazonaws.com >/dev/null && echo "SSM endpoint resolves - resolver is fine"
+    getent hosts ssm.${AWS_REGION:-us-east-1}.amazonaws.com >/dev/null && echo "SSM endpoint resolves — resolver is fine"
     ```
     <!-- source: facts_extracted_v2.md §"Interface Endpoints (PrivateLink)" -->
 
@@ -171,7 +171,7 @@ That `count = local.is_lab3 ? 0 : 1` is the entire fault. `local.is_lab3` is `tr
     ```
     <!-- source: facts_extracted_v2.md §"Interface Endpoints (PrivateLink)" -->
 
-> **Expected Result:** Spoke B prints `10.106.1.x  app.lab.internal` - it resolves correctly. Same zone, same record, same Transit Gateway, opposite result. Because spoke B works and spoke A does not, the problem is **not** the zone, the record, or DNS in general. It is that spoke A cannot *see* the zone. That points squarely at the zone-to-VPC association.
+> **Expected Result:** Spoke B prints `10.106.1.x  app.lab.internal` — it resolves correctly. Same zone, same record, same Transit Gateway, opposite result. Because spoke B works and spoke A does not, the problem is **not** the zone, the record, or DNS in general. It is that spoke A cannot *see* the zone. That points squarely at the zone-to-VPC association.
 
 10. **Type** `exit` to leave the session.
 
@@ -213,7 +213,7 @@ You can confirm the missing association from the console or the CLI. Use whichev
 
 ## Task 6: Fix It in Terraform
 
-You have two ways to restore the association. The **pedagogical fix** edits the source of truth so the repair is permanent and reviewable - that is how SYF operates. (A fast reset alternative is noted at the end.)
+You have two ways to restore the association. The **pedagogical fix** edits the source of truth so the repair is permanent and reviewable — that is how SYF operates. (A fast reset alternative is noted at the end.)
 
 14. **Open** `endpoints.tf` in your editor and find the `aws_route53_zone_association.spoke_a` resource. **Delete** the `count` line so the association is created unconditionally, like its spoke B sibling:
 
@@ -233,7 +233,7 @@ You have two ways to restore the association. The **pedagogical fix** edits the 
     }
     ```
 
-15. **Apply.** Drop the `-var scenario` flag - with the `count` guard gone, the resource exists regardless of scenario, and omitting the flag returns `scenario` to its healthy default:
+15. **Apply.** Drop the `-var scenario` flag — with the `count` guard gone, the resource exists regardless of scenario, and omitting the flag returns `scenario` to its healthy default:
 
     ```bash
     terraform apply -var student_id=s01
@@ -244,7 +244,7 @@ You have two ways to restore the association. The **pedagogical fix** edits the 
 
 16. **Type** `yes` to apply.
 
-> **Expected Result:** `Apply complete! Resources: 1 added.` Note that removing `count` changes the resource address from `aws_route53_zone_association.spoke_a[0]` back to `aws_route53_zone_association.spoke_a` - Terraform handles this transparently.
+> **Expected Result:** `Apply complete! Resources: 1 added.` Note that removing `count` changes the resource address from `aws_route53_zone_association.spoke_a[0]` back to `aws_route53_zone_association.spoke_a` — Terraform handles this transparently.
 
 ---
 
@@ -277,7 +277,7 @@ You have two ways to restore the association. The **pedagogical fix** edits the 
 
 ## Knowledge Checks
 
-**Question 1.** Spoke B resolves `app.lab.internal` but spoke A returns NXDOMAIN, even though both spokes share the same Transit Gateway and the record never changed. Why does association - not routing or the record itself - explain this difference?
+**Question 1.** Spoke B resolves `app.lab.internal` but spoke A returns NXDOMAIN, even though both spokes share the same Transit Gateway and the record never changed. Why does association — not routing or the record itself — explain this difference?
 
 <details><summary>Answer</summary>
 
@@ -288,25 +288,25 @@ A Route 53 **private** hosted zone only answers DNS queries that originate in a 
 
 <details><summary>Answer</summary>
 
-Session Manager only works because the SSM interface endpoints resolve via private DNS and the endpoint security groups permit the instance on 443. If the VPC's `.2` resolver were down, the SSM endpoint names would not resolve and the agent could not connect - you would have no shell. If a security group were blocking, the endpoint connection would fail. The shell working proves the resolver and the endpoint SGs are healthy, which isolates the failure to something specific to the `lab.internal` zone - its association to spoke A.
+Session Manager only works because the SSM interface endpoints resolve via private DNS and the endpoint security groups permit the instance on 443. If the VPC's `.2` resolver were down, the SSM endpoint names would not resolve and the agent could not connect — you would have no shell. If a security group were blocking, the endpoint connection would fail. The shell working proves the resolver and the endpoint SGs are healthy, which isolates the failure to something specific to the `lab.internal` zone — its association to spoke A.
 </details>
 
 **Question 3.** In the Terraform, what does `count = local.is_lab3 ? 0 : 1` do to the `aws_route53_zone_association.spoke_a` resource, and why was the association written as a separate resource from the `aws_route53_zone` itself?
 
 <details><summary>Answer</summary>
 
-`count = local.is_lab3 ? 0 : 1` evaluates to `0` when the scenario is `lab3` (because `local.is_lab3` is `true`), and a resource with `count = 0` is not created - so the spoke A association is absent in the `lab3` state and present otherwise. The association is a separate `aws_route53_zone_association` resource (rather than a `vpc {}` block inside `aws_route53_zone`) precisely so that one VPC's association can be added or removed without recreating or modifying the zone. This is the standard Terraform pattern for centrally owned private zones that many VPCs attach to over time - the kind of model SYF runs from its central endpoint account.
+`count = local.is_lab3 ? 0 : 1` evaluates to `0` when the scenario is `lab3` (because `local.is_lab3` is `true`), and a resource with `count = 0` is not created — so the spoke A association is absent in the `lab3` state and present otherwise. The association is a separate `aws_route53_zone_association` resource (rather than a `vpc {}` block inside `aws_route53_zone`) precisely so that one VPC's association can be added or removed without recreating or modifying the zone. This is the standard Terraform pattern for centrally owned private zones that many VPCs attach to over time — the kind of model SYF runs from its central endpoint account.
 </details>
 
 ---
 
 ## Lab Summary
 
-You took a healthy private-DNS design, injected a single realistic fault by switching the Terraform stack into `lab3`, and proved the cause methodically: NXDOMAIN from spoke A, clean resolution from spoke B, and a missing VPC in the Route 53 zone's association list. You then fixed it the SYF way - by restoring the `aws_route53_zone_association.spoke_a` resource in Terraform and re-applying - and confirmed the repair with `./verify.sh`.
+You took a healthy private-DNS design, injected a single realistic fault by switching the Terraform stack into `lab3`, and proved the cause methodically: NXDOMAIN from spoke A, clean resolution from spoke B, and a missing VPC in the Route 53 zone's association list. You then fixed it the SYF way — by restoring the `aws_route53_zone_association.spoke_a` resource in Terraform and re-applying — and confirmed the repair with `./verify.sh`.
 
 The transferable lesson: with centralized VPC endpoints and Route 53 private zones, "name doesn't resolve in one VPC but works in another" almost always means a missing or mis-scoped zone association, not a broken resolver. Check association scope first.
 
-**Next:** Lab 4 is the troubleshooting capstone. You will diagnose a *compound* connectivity failure - two independent faults at once - using VPC Flow Logs and Reachability Analyzer from the read-only network-operations role, and fix both in Terraform.
+**Next:** Lab 4 is the troubleshooting capstone. You will diagnose a *compound* connectivity failure — two independent faults at once — using VPC Flow Logs and Reachability Analyzer from the read-only network-operations role, and fix both in Terraform.
 
 ---
 
