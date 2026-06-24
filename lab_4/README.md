@@ -13,11 +13,11 @@
 
 ## Lab Overview
 
-This is the troubleshooting capstone. Everything you have built and broken so far - Transit Gateway routing (Lab 1), the cross-account read-only `network-operations` role (Lab 2), and private DNS (Lab 3) - comes together here. The `lab4` scenario injects a **compound failure**: spoke A cannot reach spoke B, and there is **more than one** root cause. You will diagnose methodically, using the right tool for each layer, from the read-only visibility role a SYF network engineer actually operates with.
+This is the troubleshooting capstone. Everything you have built and broken so far - Transit Gateway routing (Lab 1), the cross-account read-only `network-operations` role (Lab 2), and private DNS (Lab 3) — comes together here. The `lab4` scenario injects a **compound failure**: spoke A cannot reach spoke B, and there is **more than one** root cause. You will diagnose methodically, using the right tool for each layer, from the read-only visibility role a SYF network engineer actually operates with.
 
 The discipline this lab teaches: when a path is broken, do not stop at the first fault you find. Confirm you have found *every* fault before you declare victory. Fixing one of two faults leaves the path just as broken - and burns a change window for nothing.
 
-> **Aviatrix disclaimer.** This lab uses AWS Transit Gateway. In your environment the hub-and-spoke transit is **Aviatrix** (Aviatrix Transit Gateway / Spoke Gateways), managed by the network team - the concepts map directly; the management plane differs. The spoke route tables and security groups you diagnose here are the AWS substrate that the Aviatrix Controller programs in production. Doing it by hand is what makes each fault visible.
+> **Aviatrix disclaimer.** This lab uses AWS Transit Gateway. In your environment the hub-and-spoke transit is **Aviatrix** (Aviatrix Transit Gateway / Spoke Gateways), managed by the network team — the concepts map directly; the management plane differs. The spoke route tables and security groups you diagnose here are the AWS substrate that the Aviatrix Controller programs in production. Doing it by hand is what makes each fault visible.
 
 ---
 
@@ -105,7 +105,7 @@ Fix only one and the path stays down. That is the whole point.
     ```
 <!-- source: course_outline_v3.md §"Lab 4" -->
 
-    Read the plan. Terraform reports **two** resources destroyed - one security-group rule and one route:
+    Read the plan. Terraform reports **two** resources destroyed — one security-group rule and one route:
 
     ```
     # aws_route.spoke_b_to_spoke_a[0] will be destroyed
@@ -115,7 +115,7 @@ Fix only one and the path stays down. That is the whole point.
 
 3. **Type** `yes` to apply.
 
-> **Expected Result:** `Destroy complete! Resources: 2 destroyed.` The plan naming both resources is a hint, not the answer - in a real incident you do not get a plan that lists the faults. Treat the rest of this lab as if you did not see it.
+> **Expected Result:** `Destroy complete! Resources: 2 destroyed.` The plan naming both resources is a hint, not the answer — in a real incident you do not get a plan that lists the faults. Treat the rest of this lab as if you did not see it.
 
 ---
 
@@ -131,13 +131,13 @@ Fix only one and the path stays down. That is the whole point.
     ```
 <!-- source: course_outline_v3.md §"Lab 4" -->
 
-> **Expected Result:** 100% packet loss - spoke A cannot reach spoke B. Symptom confirmed. Now you investigate from the read-only role, not from the instance.
+> **Expected Result:** 100% packet loss — spoke A cannot reach spoke B. Symptom confirmed. Now you investigate from the read-only role, not from the instance.
 
 ---
 
 ## Task 3: Assume the network-operations Role
 
-A SYF network engineer investigates with read-only visibility, not admin. Assume the `network-operations` role and work from its temporary credentials - exactly the pattern you exercised in Lab 2.
+A SYF network engineer investigates with read-only visibility, not admin. Assume the `network-operations` role and work from its temporary credentials — exactly the pattern you exercised in Lab 2.
 
 5. **Assume** the role and export the temporary STS credentials into your shell:
 
@@ -184,7 +184,7 @@ VPC Flow Logs record an `ACCEPT` or `REJECT` verdict for traffic at each ENI. A 
 
 ## Task 5: Find Fault 2 with Reachability Analyzer
 
-Reachability Analyzer is static analysis of the network configuration - it proves whether a path *can* work and, when it cannot, names the resource at fault. Run it on the **return** path, `spoke_b -> spoke_a`.
+Reachability Analyzer is static analysis of the network configuration — it proves whether a path *can* work and, when it cannot, names the resource at fault. Run it on the **return** path, `spoke_b -> spoke_a`.
 
 8. **Create and run** the analysis (the network-operations role is granted the `NetworkInsights` actions for exactly this):
 
@@ -276,7 +276,7 @@ Diagnosis is done from read-only. The fix happens with your own identity, in cod
 
 15. **Type** `yes` to apply.
 
-> **Expected Result:** `Apply complete! Resources: 2 added.` You restored both faults in a single minimal change - exactly what you would hand to a change-review board: two resources, two layers, no collateral edits.
+> **Expected Result:** `Apply complete! Resources: 2 added.` You restored both faults in a single minimal change — exactly what you would hand to a change-review board: two resources, two layers, no collateral edits.
 
 ---
 
@@ -301,24 +301,24 @@ Diagnosis is done from read-only. The fix happens with your own identity, in cod
     ```
 <!-- source: course_outline_v3.md §"Lab 4" -->
 
-> **Expected Result:** `ALL CHECKS PASSED -- healthy baseline confirmed.` Check 4 (`spoke_a -> spoke_b reachable over the TGW`) passes. If it still fails, you fixed only one fault - go back and confirm *both* the `security_groups.tf` rule and the `network.tf` route had their `count` guard removed.
+> **Expected Result:** `ALL CHECKS PASSED -- healthy baseline confirmed.` Check 4 (`spoke_a -> spoke_b reachable over the TGW`) passes. If it still fails, you fixed only one fault — go back and confirm *both* the `security_groups.tf` rule and the `network.tf` route had their `count` guard removed.
 
 ---
 
 ## Knowledge Checks
 
-**Question 1.** Flow Logs showed a `REJECT` for ICMP at spoke B's ENI, and Reachability Analyzer reported "no route to destination" on the `spoke_b -> spoke_a` path. Why did it take *two different tools* to find the two faults - why didn't Flow Logs reveal the missing route?
+**Question 1.** Flow Logs showed a `REJECT` for ICMP at spoke B's ENI, and Reachability Analyzer reported "no route to destination" on the `spoke_b -> spoke_a` path. Why did it take *two different tools* to find the two faults — why didn't Flow Logs reveal the missing route?
 
 <details><summary>Answer</summary>
 
-Flow Logs record what actually happened to packets at an ENI: the inbound ICMP from spoke A reached spoke B's interface and was dropped by the security group, logged as `REJECT`. That is real, observed traffic - but the packet never got far enough to expose the *return*-path problem, because there was no reply traffic to log a route failure for (and a missing route does not generate a flow-log `REJECT` at all - it simply has nowhere to send the packet). Reachability Analyzer is static configuration analysis: it evaluates route tables and security groups along a path you specify and reports the first blocking resource, so asking it about `spoke_b -> spoke_a` surfaced the missing route directly. Observed-traffic tools and config-analysis tools see different layers; a compound fault often needs both.
+Flow Logs record what actually happened to packets at an ENI: the inbound ICMP from spoke A reached spoke B's interface and was dropped by the security group, logged as `REJECT`. That is real, observed traffic — but the packet never got far enough to expose the *return*-path problem, because there was no reply traffic to log a route failure for (and a missing route does not generate a flow-log `REJECT` at all — it simply has nowhere to send the packet). Reachability Analyzer is static configuration analysis: it evaluates route tables and security groups along a path you specify and reports the first blocking resource, so asking it about `spoke_b -> spoke_a` surfaced the missing route directly. Observed-traffic tools and config-analysis tools see different layers; a compound fault often needs both.
 </details>
 
 **Question 2.** You did the entire investigation from the read-only `network-operations` role but performed the fix from your own identity. Why is that separation the correct operating model, and what would have happened if you had tried `terraform apply` while the role's temporary credentials were still exported?
 
 <details><summary>Answer</summary>
 
-Separating read-only diagnosis from change is least privilege in practice: an on-call engineer can see everything needed to find root cause without holding the power to change production, which limits blast radius and satisfies audit/change-control. The `network-operations` role grants `ec2:Describe*`, log reads, and the Reachability Analyzer actions - but not the write actions (`ec2:CreateRoute`, `ec2:AuthorizeSecurityGroupIngress`, etc.) that `terraform apply` needs. If you had left the role's credentials exported, the apply would have failed with `AccessDenied` / `UnauthorizedOperation`. Unsetting the temporary credentials returns you to your own identity, which holds the change permission - and the change goes through Terraform so it is reviewable and reproducible.
+Separating read-only diagnosis from change is least privilege in practice: an on-call engineer can see everything needed to find root cause without holding the power to change production, which limits blast radius and satisfies audit/change-control. The `network-operations` role grants `ec2:Describe*`, log reads, and the Reachability Analyzer actions — but not the write actions (`ec2:CreateRoute`, `ec2:AuthorizeSecurityGroupIngress`, etc.) that `terraform apply` needs. If you had left the role's credentials exported, the apply would have failed with `AccessDenied` / `UnauthorizedOperation`. Unsetting the temporary credentials returns you to your own identity, which holds the change permission — and the change goes through Terraform so it is reviewable and reproducible.
 </details>
 
 **Question 3.** A colleague says "I added the security-group rule, the Flow Log `REJECT` stopped, so the incident is resolved." Reachability Analyzer still reports the path as not reachable. Explain why both observations can be true at the same time, and what it tells you about closing incidents on a single signal.
@@ -340,7 +340,7 @@ The capstone habit, in five steps you can reuse on any AWS network incident:
 4. **Assume compound until proven simple.** Do not stop at the first fault. Confirm every cause before you touch anything - fixing half a compound fault wastes a change window and erodes trust in the diagnosis.
 5. **Remediate in the source of truth** (Terraform), as a minimal, reviewable change, then **re-verify end to end** (`./verify.sh`), not just the one signal you first chased.
 
-In SYF's Aviatrix-managed environment the same discipline applies - the Controller programs the routes and segmentation, but the failure modes (a missing route, a too-tight policy) and the diagnostic tools (Flow Logs, Reachability Analyzer, the network-operations role) are identical.
+In SYF's Aviatrix-managed environment the same discipline applies — the Controller programs the routes and segmentation, but the failure modes (a missing route, a too-tight policy) and the diagnostic tools (Flow Logs, Reachability Analyzer, the network-operations role) are identical.
 
 ---
 
@@ -348,7 +348,7 @@ In SYF's Aviatrix-managed environment the same discipline applies - the Controll
 
 You diagnosed a compound, two-fault connectivity failure entirely from a read-only `network-operations` role: VPC Flow Logs exposed a security-group `REJECT` at spoke B's ENI, and Reachability Analyzer proved a missing return route in spoke B's route table. You fixed both in Terraform as a single minimal change and confirmed full reachability with `./verify.sh`. Most importantly, you practiced the habit that separates a senior network engineer from a junior one: never close an incident on the first fault you find.
 
-This completes the IO-106 lab track. You have deployed an AWS-native hub-and-spoke network with Terraform, exercised transit routing and segmentation, cross-account role assumption, private endpoints and DNS, and end-to-end troubleshooting - the AWS substrate that SYF's Aviatrix overlay and central endpoint account ride on.
+This completes the IO-106 lab track. You have deployed an AWS-native hub-and-spoke network with Terraform, exercised transit routing and segmentation, cross-account role assumption, private endpoints and DNS, and end-to-end troubleshooting — the AWS substrate that SYF's Aviatrix overlay and central endpoint account ride on.
 
 ---
 
