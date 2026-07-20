@@ -191,12 +191,12 @@ VPC Flow Logs record an `ACCEPT` or `REJECT` verdict for traffic at each ENI. A 
 
 Reachability Analyzer is static analysis of the network configuration - it proves whether a path *can* work and, when it cannot, names the resource at fault. Run it on the **return** path, `spoke_b -> spoke_a`.
 
-8. **Create and run** the analysis (the network-operations role is granted the `NetworkInsights` actions for exactly this):
+8. **Create and run** the analysis on the return path. Reachability Analyzer accepts `tcp`/`udp` only (**not** `icmp`) - a missing route blocks every protocol, so `tcp` proves the routing fault just as well. The network-operations role grants the `NetworkInsights` actions for exactly this:
 
     ```bash
     PATH_ID=$(aws ec2 create-network-insights-path \
       --region "$REGION" \
-      --source "$B_ID" --destination "$A_ID" --protocol icmp \
+      --source "$B_ID" --destination "$A_ID" --protocol tcp \
       --query 'NetworkInsightsPath.NetworkInsightsPathId' --output text)
 
     ANALYSIS_ID=$(aws ec2 start-network-insights-analysis \
