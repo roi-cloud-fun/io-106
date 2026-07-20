@@ -138,16 +138,21 @@ This is the confusing part, and it is the whole point: you can assume the role, 
 
 CloudTrail records the failed call with the caller, the action, and the error - the "who/what/when" you would attach to a ticket.
 
-5. **Open** the AWS console and go to **CloudTrail > Event history**, or query from the CLI (under your own identity):
+5. **Find the failed call.** In the console you can use **CloudTrail > Event history** (filter Event name = `CreateNetworkInsightsPath`). From the CLI, do not spam the screen with raw events - they are huge JSON blobs. Write them to a file, then extract just the fields that matter (run under your own identity, after the `unset` in Task 3):
 
     ```bash
     aws cloudtrail lookup-events \
       --lookup-attributes AttributeKey=EventName,AttributeValue=CreateNetworkInsightsPath \
-      --max-results 5 --query 'Events[].CloudTrailEvent' --output text
+      --max-results 10 --output json > events.json
+
+    # one readable line per matching event (jq is pre-installed on the deploy box):
+    jq -r '.Events[] | (.CloudTrailEvent|fromjson) | "\(.eventTime)  errorCode=\(.errorCode // "-")  caller=\(.userIdentity.arn // "-")"' events.json
     ```
+
+    You should see two `CreateNetworkInsightsPath` lines: the **successful** create from Task 1 (`errorCode=-`) and the **denied** one from Task 3 (`errorCode=Client.UnauthorizedOperation`, or `AccessDenied`). No `jq`? Find the denial without scrolling: `grep -o '"errorCode":"[^"]*"' events.json`.
 <!-- source: facts_extracted_v2.md §"CloudTrail for Access Troubleshooting" -->
 
-6. **Read** the event JSON. Confirm `errorCode` is `AccessDenied` / `Client.UnauthorizedOperation`, and note the `userIdentity` is your assumed `netops` session and the action is `CreateNetworkInsightsPath`.
+6. **Read the denied event.** Confirm the denied line's `errorCode` is `Client.UnauthorizedOperation` / `AccessDenied`. For its full context, open `events.json` or run `jq '.Events[] | (.CloudTrailEvent|fromjson) | select(.errorCode)' events.json`: note the `userIdentity` is your assumed `netops` session and `eventName` is `CreateNetworkInsightsPath`.
 
 **Expected Result:** You find a `CreateNetworkInsightsPath` event with an authorization-failure `errorCode`, made by your assumed network-operations session. CloudTrail confirms the *what* and *who*. It does not, by itself, explain *why* a role whose policy allows the action was refused - for that you compare the role's policy against its guardrail next. (CloudTrail Event history can lag a few minutes; if it is not visible yet, proceed and check back.)
 
