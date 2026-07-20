@@ -198,11 +198,11 @@ The route is defined in `network.tf` as `aws_route.spoke_a_to_spoke_b`, guarded 
 
 ## Task 7: Re-Verify
 
-14. **Re-run** Reachability Analyzer (Task 4) - or just re-test from the instance:
+14. **Re-analyze** your existing path in Reachability Analyzer: select `io106-<your_id>-a-to-b` and click **Analyze path** again. Reachability Analyzer keeps an **analysis history** on each path, so the new run is saved alongside the earlier one - you can open both and compare this **Reachable** result against the earlier **Not reachable** result on the same path (no need to create a second path). Or just re-test from the instance:
 
     ```bash
     aws ssm start-session --target "$A_ID"
-    # inside the session:
+    # inside the spoke A session
     ping -c 4 -W 2 SPOKE_B_IP
     exit
     ```
