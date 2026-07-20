@@ -179,6 +179,17 @@ VPC Flow Logs record an `ACCEPT` or `REJECT` verdict for traffic at each ENI. A 
     ```
 <!-- source: facts_extracted_v2.md §"VPC Flow Logs" -->
 
+    **Console path (equivalent).** Open **CloudWatch > Logs > Log Analytics**, **select your flow-log group first** (the `flow_log_group` output - `terraform output -raw flow_log_group`), set the time range to the **last 30 minutes**, and run this Logs Insights query (replace `<B_IP>` with your spoke B IP):
+
+    ```
+    fields @timestamp, srcAddr, dstAddr, protocol, action
+    | filter action = "REJECT" and dstAddr = "<B_IP>" and protocol = 1
+    | sort @timestamp desc
+    | limit 20
+    ```
+
+    Look for rows where `srcAddr` is spoke A's IP and `action` is `REJECT`. (The console runs under your own sign-in, not the assumed CLI role, so Logs Insights works here even though the read-only role cannot run queries.)
+
 > **Expected Result:** One or more flow-log records where `srcaddr` is the spoke A IP, `dstaddr` is the spoke B IP, `protocol` is `1` (ICMP), and the action field is **`REJECT`**. A `REJECT` at spoke B's ENI for traffic that arrived there means the packet got across the Transit Gateway and into spoke B's VPC, then was dropped by spoke B's **security group**. That is **Fault 1**: spoke B's instance SG is missing an ingress rule for ICMP from spoke A.
 
 > **If you see no records yet:** VPC Flow Logs take up to ~10 minutes to deliver the first batch after an apply. Re-send a few pings from spoke A (Task 2) to generate fresh traffic, wait, and re-run. You can widen the pattern by dropping `dstaddr=$B_IP` to see all `REJECT`s in the group.

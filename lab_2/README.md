@@ -141,7 +141,11 @@ This is the confusing part, and it is the whole point: you can assume the role, 
 
 CloudTrail records the failed call with the caller, the action, and the error - the "who/what/when" you would attach to a ticket.
 
-5. **Find the failed call.** In the console you can use **CloudTrail > Event history** (filter Event name = `CreateNetworkInsightsPath`). From the CLI, do not spam the screen with raw events - they are huge JSON blobs. Write them to a file, then extract just the fields that matter (run under your own identity, after the `unset` in Task 3):
+5. **Find the failed call** (run under your own identity, after the `unset` in Task 3).
+
+    **Console path:** Open **CloudTrail > Event history**, set the lookup filter to **Event name = `CreateNetworkInsightsPath`** (narrow the time range to the last hour if needed), and click the matching event. On the event detail page, read the **Error code** (`Client.UnauthorizedOperation` / `AccessDenied`) and expand **Event record** (the JSON) to see the denied action and the `userIdentity` of your assumed `netops` session.
+
+    **CLI path:** The raw events are huge JSON blobs, so do not dump them to the screen - write them to a file, then extract just the fields that matter:
 
     ```bash
     aws cloudtrail lookup-events \
