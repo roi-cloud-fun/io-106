@@ -204,7 +204,7 @@ The instances run the SSM agent and register with Systems Manager over the priva
 
     If the SSM checks FAIL on the first run, the instances simply have not finished registering. Wait 2-3 minutes and re-run `bash ./verify.sh`. A `WARN` about no Flow Log streams yet is **not** a failure - first records take about 10 minutes to deliver.
 
-**Expected Result:** `ALL CHECKS PASSED -- healthy baseline confirmed. You are ready for Lab 1.` If any check other than the Flow Logs WARN fails after a couple of retries, raise it with your instructor before continuing - Labs 1-4 assume a clean baseline.
+**Expected Result:** `ALL CHECKS PASSED -- healthy baseline confirmed.` If any check other than the Flow Logs WARN fails after a couple of retries, raise it with your instructor before continuing - Labs 1-4 assume a clean baseline.
 
 ---
 

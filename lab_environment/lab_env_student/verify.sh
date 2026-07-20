@@ -138,7 +138,11 @@ fi
 
 echo ""
 if [ "$FAILURES" -eq 0 ]; then
-  echo "ALL CHECKS PASSED -- healthy baseline confirmed. You are ready for Lab 1."
+  if [ "$SCENARIO" = "healthy" ]; then
+    echo "ALL CHECKS PASSED -- healthy baseline confirmed."
+  else
+    echo "ALL CHECKS PASSED (scenario=$SCENARIO)."
+  fi
 else
   echo "$FAILURES CHECK(S) FAILED."
   [ "$SCENARIO" = "healthy" ] && echo "On the healthy baseline this means something is wrong -- investigate before continuing."
