@@ -271,6 +271,8 @@ Diagnosis is done from read-only. The fix happens with your own identity, in cod
     ```
 <!-- source: facts_extracted_v2.md §"Cross-Account IAM Roles" -->
 
+    The `Arn` must **not** contain `network-operations`. If you skip this `unset`, Terraform runs as the read-only role and `plan`/`apply` fail with a wall of `AccessDenied` errors naming `assumed-role/io106-<id>-network-operations` - for example *not authorized to perform `iam:ListRolePolicies` / `ssm:GetParameter` / `logs:ListTagsForResource`*. That is the role being read-only **by design** - it cannot even refresh all of the state, let alone change it. If you see those errors, you forgot to unset: run the two commands above and retry.
+
 12. **Fix Fault 1.** Open `security_groups.tf`, find `aws_vpc_security_group_ingress_rule.spoke_b_icmp_from_a`, and **delete** its `count` line so the ingress rule is always created:
 
     ```hcl
