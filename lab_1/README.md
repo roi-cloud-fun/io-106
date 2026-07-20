@@ -113,7 +113,8 @@ Reachability Analyzer evaluates the *configured* path - routes, security groups,
 
 6. **Open** the AWS console and navigate to **Network Manager > Reachability Analyzer**. (AWS moved this tool out of the VPC console - if you look for it under VPC you will not find it.)
 
-7. **Click** **Create and analyze path** and set:
+7. **Click** **Create and analyze path**, then set:
+    - **Name:** `io106-<your_id>-a-to-b` - the account is shared across all students, so name your path with your student id (the same `io106-<student_id>-` convention as every other resource) or you will not be able to find yours among the others.
     - **Source type:** Instance, **Source:** your spoke A instance (`io106-<id>-spoke-a`).
     - **Destination type:** Instance, **Destination:** your spoke B instance (`io106-<id>-spoke-b`).
     - **Protocol:** ICMP (or TCP - the routing verdict is the same).
