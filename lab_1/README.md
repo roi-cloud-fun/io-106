@@ -141,7 +141,7 @@ A good engineer confirms the tool's verdict against the resource itself.
 
     You should see routes for the local CIDR (`10.106.1.0/24`) and for the transit VPC (`10.106.0.0/24` via the TGW), but **no** entry for `10.106.2.0/24` (spoke B). That missing line is the fault.
 
-10. **Cross-check** with Flow Logs (optional but instructive). In **CloudWatch > Logs Insights**, select your flow log group (`terraform output -raw flow_log_group`) and run:
+10. **Cross-check** with Flow Logs (optional but instructive). In **CloudWatch**, open **Logs > Log Analytics** - this is the Logs Insights query editor (AWS reorganized the console; there is no longer a top-level **Logs Insights** entry). **Select your flow log group first** (`terraform output -raw flow_log_group` prints its name) using the **Select log group(s)** control - Log Analytics will not run a query until a log group is chosen - then enter this query and click **Run query**:
 
     ```
     fields @timestamp, srcAddr, dstAddr, action
