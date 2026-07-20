@@ -119,9 +119,9 @@ Reachability Analyzer evaluates the *configured* path - routes, security groups,
     - **Destination type:** Instance, **Destination:** your spoke B instance (`io106-<id>-spoke-b`).
     - **Protocol:** ICMP (or TCP - the routing verdict is the same).
 
-8. **Click** **Create and analyze path** and wait for the analysis to complete (a few seconds to a minute).
+8. **Click** **Create and analyze path** and wait for the analysis to complete (a few seconds to a minute). When it finishes, **open the analysis and read it in detail - do not stop at the top-line verdict.** Expand the **path details**: Reachability Analyzer lays out the forward path hop by hop - the source instance's network interface, its security group, spoke A's route table, the TGW attachment, and onward to the destination - and marks the **status** of each component. Read down the hops to the point where the path **stops**, and read the **explanation** shown at that hop.
 
-**Expected Result:** The path returns **Not reachable**. The explanation identifies the break as **no route to the destination in the source VPC route table** - the analyzer points at spoke A's route table, not at any security group. That distinction is the whole diagnosis: a security-group fault would show the packet reaching spoke B's ENI and being rejected there; here it never leaves spoke A.
+**Expected Result:** The path returns **Not reachable**. Walking the hop-by-hop detail, every component is green until **spoke A's route table**, where the path stops - the explanation there says there is **no route to the destination CIDR in the source route table**. Note what the path does *not* reach: it never gets to the TGW, spoke B's ENI, or any security group. The analyzer points squarely at spoke A's route table. That distinction is the whole diagnosis: a security-group fault would instead show the packet reaching spoke B's ENI and being rejected *there*; here it never leaves spoke A.
 
 ---
 
@@ -216,7 +216,7 @@ The route is defined in `network.tf` as `aws_route.spoke_a_to_spoke_b`, guarded 
     ```
     <!-- source: course_outline_v3.md §"Lab 1" -->
 
-**Expected Result:** The ping now succeeds (replies, 0% loss), Reachability Analyzer returns **Reachable**, and `verify.sh` reports the spoke A -> spoke B check as PASS.
+**Expected Result:** The ping now succeeds (replies, 0% loss). Reachability Analyzer now returns **Reachable** - open the new analysis and walk the path: this time it runs all the way through spoke A's route table and the TGW attachment to spoke B's network interface, every hop green, whereas the earlier run stopped at the route table. And `verify.sh` reports the spoke A -> spoke B check as PASS.
 
 ---
 
