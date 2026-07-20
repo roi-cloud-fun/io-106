@@ -165,6 +165,7 @@ This is the core skill: when an action is denied but you believe it should be al
 7. **Show that the role's own policy grants the action.** Read its inline permissions policy and look for the Reachability Analyzer statement:
 
     ```bash
+    ROLE_NAME=$(basename "$(terraform output -raw network_operations_role_arn)")   # set in Task 1; re-derive here in case you reconnected
     aws iam get-role-policy --role-name "$ROLE_NAME" --policy-name network-visibility \
       --query 'PolicyDocument.Statement[?Sid==`ReachabilityAnalyzer`].Action'
     ```
