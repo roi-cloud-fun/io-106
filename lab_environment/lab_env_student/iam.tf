@@ -68,7 +68,10 @@ data "aws_iam_policy_document" "netops_permissions" {
       "ec2:DeleteNetworkInsightsAnalysis",
       "ec2:StartNetworkInsightsAnalysis",
       "ec2:DescribeNetworkInsightsPaths",
-      "ec2:DescribeNetworkInsightsAnalyses"
+      "ec2:DescribeNetworkInsightsAnalyses",
+      "tiros:CreateQuery",
+      "tiros:GetQueryAnswer",
+      "tiros:GetQueryExplanation"
     ]
     resources = ["*"]
   }
