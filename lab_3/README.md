@@ -113,17 +113,16 @@ In Terraform, the zone and its associations are deliberately **separate resource
     ```
     <!-- source: facts_extracted_v2.md §"Interface Endpoints (PrivateLink)" -->
 
-6. **Inside the session**, try to resolve the name three ways. `getent` is always present on Amazon Linux 2023; `dig`/`nslookup` come from `bind-utils`:
+6. **Inside the session**, try to resolve the name. `getent` (built into glibc) and `nslookup` are both preinstalled on Amazon Linux 2023 - use them. Do **not** `dnf install` anything here: this instance has no NAT and no internet gateway, so a package install cannot reach the repos and just **hangs** (Ctrl-C to escape if you try it).
 
     ```bash
     getent hosts app.lab.internal; echo "exit=$?"
-    sudo dnf install -y bind-utils >/dev/null 2>&1   # if dig/nslookup are missing
-    dig +short app.lab.internal
     nslookup app.lab.internal
+    command -v dig >/dev/null && dig +short app.lab.internal || echo "(dig not installed - skipping; no internet to add it)"
     ```
     <!-- source: facts_extracted_v2.md §"Interface Endpoints (PrivateLink)" -->
 
-> **Expected Result:** `getent` returns no output and `exit=2` (name not found). `dig +short` prints nothing. `nslookup` reports `** server can't find app.lab.internal: NXDOMAIN`. The name does not resolve from spoke A.
+> **Expected Result:** `getent` returns no output and `exit=2` (name not found). `nslookup` (using the VPC resolver at `10.106.1.2`) reports `** server can't find app.lab.internal: NXDOMAIN`. If `dig` happens to be installed it prints nothing; otherwise you see the skip message. The name does not resolve from spoke A.
 
 7. **Confirm the instance itself is otherwise healthy** - this rules out a broken resolver or a dead endpoint. From the same session:
 
