@@ -111,7 +111,7 @@ By the end of this lab, you will:
 
 Reachability Analyzer evaluates the *configured* path - routes, security groups, attachments - without sending a packet, and tells you the first hop that blocks it. It is the fastest way to separate "no route" from "blocked by SG."
 
-6. **Open** the AWS console and navigate to **VPC > Reachability Analyzer**.
+6. **Open** the AWS console and navigate to **Network Manager > Reachability Analyzer**. (AWS moved this tool out of the VPC console - if you look for it under VPC you will not find it.)
 
 7. **Click** **Create and analyze path** and set:
     - **Source type:** Instance, **Source:** your spoke A instance (`io106-<id>-spoke-a`).
