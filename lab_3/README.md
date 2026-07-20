@@ -165,9 +165,9 @@ You can confirm the missing association from the console or the CLI. Use whichev
 
 **Console path:**
 
-11. **Open** the **Route 53** console, go to **Hosted zones**, and click **lab.internal** (it is marked **Private hosted zone**).
+11. **Open** the **Route 53** console, go to **Hosted zones**, and click **lab.internal** (it is marked **Private hosted zone**). At the top of the page, **expand the _Hosted zone details_ section** - it is collapsed by default, and the associated VPCs are hidden inside it.
 
-12. **Open** the **VPC associations** for the zone (in the hosted-zone detail view, the associated VPCs are listed; choose **Edit** to see the full set).
+12. In the expanded **Hosted zone details**, read the **VPCs** list - these are the VPCs allowed to resolve names in this zone. (You can also click **Edit** to see the full editable set.)
 
 > **Expected Result:** The zone lists the **Transit** VPC and the **spoke B** VPC as associated, but **not** the spoke A VPC. That missing entry is the fault.
 
