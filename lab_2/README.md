@@ -92,9 +92,10 @@ Before you break it, see the role doing real work so the failure is unmistakable
 
 ## Task 2: Inject the Fault
 
-3. **Apply** the lab2 scenario from the module directory. This attaches a **permissions boundary** to the network-operations role - it does not touch the role's own permissions policy:
+3. **Preview, then apply** the lab2 scenario from the module directory. Always run `plan` before `apply` - it shows what will change and catches errors before they reach the account. This attaches a **permissions boundary** to the network-operations role - it does not touch the role's own permissions policy:
 
     ```bash
+    terraform plan -var scenario=lab2     # review the change before applying
     terraform apply -var scenario=lab2
     ```
 <!-- source: course_outline_v3.md §"Lab 2" -->

@@ -63,9 +63,10 @@ By the end of this lab, you will:
 
 ## Task 2: Inject the Fault
 
-2. **Apply** the lab1 scenario from the module directory (`~/io-106/lab_environment/lab_env_student`). This toggles exactly one real resource - spoke A's route to spoke B - off:
+2. **Preview, then apply** the lab1 scenario from the module directory (`~/io-106/lab_environment/lab_env_student`). Always run `plan` before `apply` - it shows exactly what will change and surfaces any error before you touch the account. This toggles exactly one real resource - spoke A's route to spoke B - off:
 
     ```bash
+    terraform plan -var scenario=lab1     # review: expect 0 to add, 0 to change, 1 to destroy
     terraform apply -var scenario=lab1
     ```
     <!-- source: course_outline_v3.md §"Lab 1" -->
