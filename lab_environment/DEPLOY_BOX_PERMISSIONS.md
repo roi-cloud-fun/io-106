@@ -12,6 +12,7 @@ It is a single superset policy: everything any lab identity touches. You can att
 | Sid | Why it's needed | Labs / steps |
 |-----|-----------------|--------------|
 | `NetworkingProvisionAndDiagnose` | `terraform apply/destroy` builds the whole stack (VPCs, subnets, route tables, routes, Transit Gateway + attachments, interface VPC endpoints, security groups, EC2 instances, flow logs) and the labs read it back; also **Reachability Analyzer** (`*NetworkInsights*`). | All labs; Lab 1/4 Reachability Analyzer |
+| `ReachabilityAnalyzerEngine` | **`StartNetworkInsightsAnalysis` needs `tiros:*`** (Tiros is the Reachability Analyzer backend) - `ec2:*NetworkInsights*` alone is not enough. | Lab 4 (and any RA analysis) |
 | `CloudWatchLogsFlowLogsAndInsights` | Terraform creates the flow-log group; labs query it in **Log Analytics** (Logs Insights: `StartQuery`/`GetQueryResults`). | Lab 1/3/4 Flow Logs |
 | `Route53PrivateDns` | Terraform creates the `lab.internal` private zone, record, and VPC associations; Lab 3 diagnoses/repairs the association. | Lab 0 build; Lab 3 |
 | `SsmParamSessionAndRunCommand` | AL2023 AMI lookup (`GetParameter`); **Session Manager** shells (`StartSession`); `verify.sh` runs checks on instances via `SendCommand`/`GetCommandInvocation`; `DescribeInstanceInformation`. | Lab 0 connect; `verify.sh`; all `start-session` |

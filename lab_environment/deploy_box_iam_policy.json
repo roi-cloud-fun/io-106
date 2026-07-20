@@ -29,6 +29,16 @@
       "Resource": "*"
     },
     {
+      "Sid": "ReachabilityAnalyzerEngine",
+      "Effect": "Allow",
+      "Action": [
+        "tiros:CreateQuery",
+        "tiros:GetQueryAnswer",
+        "tiros:GetQueryExplanation"
+      ],
+      "Resource": "*"
+    },
+    {
       "Sid": "CloudWatchLogsFlowLogsAndInsights",
       "Effect": "Allow",
       "Action": [
