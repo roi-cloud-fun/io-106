@@ -15,7 +15,7 @@
 
 Every later lab in this course starts from the same place: a healthy, AWS-native multi-VPC network that you own. In this lab you deploy that network with Terraform, learn just enough Terraform to read what you applied, and run an automated health check to confirm the baseline is green before any faults are injected.
 
-The stack is deliberately small but architecturally complete. It mirrors the shape of SYF's production environment — a hub-and-spoke transit, a shared-endpoint pattern, private DNS, and a read-only cross-account access role — using native AWS primitives you can see and touch. Later labs flip a single switch (`-var scenario=labN`) to inject one realistic fault into one real resource; you then diagnose it with AWS-native tooling and fix it by editing this same Terraform.
+The stack is deliberately small but architecturally complete. It mirrors the shape of SYF's production environment - a hub-and-spoke transit, a shared-endpoint pattern, private DNS, and a read-only cross-account access role - using native AWS primitives you can see and touch. Later labs flip a single switch (`-var scenario=labN`) to inject one realistic fault into one real resource; you then diagnose it with AWS-native tooling and fix it by editing this same Terraform.
 
 What you deploy:
 
@@ -35,7 +35,7 @@ What you deploy:
    Security groups ONLY - no NACLs (matches SYF)
 ```
 
-The whole stack is **fully private**: no internet gateway, no NAT. The test instances reach Systems Manager and AWS services through interface VPC endpoints (PrivateLink), and you access them through SSM Session Manager — no SSH, no key pairs, no public IPs.
+The whole stack is **fully private**: no internet gateway, no NAT. The test instances reach Systems Manager and AWS services through interface VPC endpoints (PrivateLink), and you access them through SSM Session Manager - no SSH, no key pairs, no public IPs.
 
 ---
 
@@ -43,7 +43,7 @@ The whole stack is **fully private**: no internet gateway, no NAT. The test inst
 
 You are a network engineer onboarding to SYF's AWS environment. Before you can troubleshoot it, you need a faithful, disposable copy you can experiment on without touching production. Terraform is how SYF provisions and reproduces network state, so your first task is to stand up your personal copy of the reference topology, confirm it is healthy, and learn to read the Terraform that defines it. Every diagnosis you perform for the rest of the day runs against this stack.
 
-> **Aviatrix note (read this first — it frames the whole course):** This lab uses AWS Transit Gateway. In your environment the hub-and-spoke transit is **Aviatrix** (Aviatrix Transit Gateway / Spoke Gateways), managed by the network team - the concepts map directly; the management plane differs. You are building by hand what the Aviatrix Controller automates, which is exactly what makes each component visible and troubleshootable.
+> **Aviatrix note (read this first - it frames the whole course):** This lab uses AWS Transit Gateway. In your environment the hub-and-spoke transit is **Aviatrix** (Aviatrix Transit Gateway / Spoke Gateways), managed by the network team - the concepts map directly; the management plane differs. You are building by hand what the Aviatrix Controller automates, which is exactly what makes each component visible and troubleshootable.
 
 ---
 
@@ -60,7 +60,7 @@ By the end of this lab, you will:
 
 ## Task 1: Confirm Your Tooling
 
-1. **Connect to your deploy instance** with SSM Session Manager — there is nothing to install on your own laptop. From the Console, open **Systems Manager**, then **Session Manager**, and **Start session** against `io106-<your_id>-deploy`. Or from any host with the AWS CLI: `aws ssm start-session --target <your-deploy-instance-id>`. Access is SSM-only 13 no SSH, no key pair, no public IP.
+1. **Connect to your deploy instance** with SSM Session Manager - there is nothing to install on your own laptop. From the Console, open **Systems Manager**, then **Session Manager**, and **Start session** against `io106-<your_id>-deploy`. Or from any host with the AWS CLI: `aws ssm start-session --target <your-deploy-instance-id>`. Access is SSM-only - no SSH, no key pair, no public IP.
 
 2. **Confirm** the three required tools are present:
 
@@ -72,6 +72,15 @@ By the end of this lab, you will:
     <!-- source: course_outline_v3.md §"Lab 0" -->
 
     These are pre-installed on the deploy instance. If any command is missing, tell your instructor before the connectivity checks in Task 6.
+
+    If `session-manager-plugin` reports *command not found* - you will also hit `SessionManagerPlugin is not found` the first time you run `aws ssm start-session` - install it and re-run the check. The AWS CLI shells out to this separate binary for `start-session`; the CLI alone is not enough:
+
+    ```bash
+    # Amazon Linux 2023 (dnf) - use `sudo yum install -y <same URL>` on Amazon Linux 2
+    sudo dnf install -y https://s3.amazonaws.com/session-manager-downloads/plugin/latest/linux_64bit/session-manager-plugin.rpm
+    session-manager-plugin   # confirm it now prints a version banner
+    ```
+    <!-- source: https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html -->
 
 3. **Change directory** into the student lab module. The `io-106` repo is already cloned on the box:
 
@@ -145,7 +154,7 @@ Every named resource is prefixed `io106-<student_id>-` so all eight students sha
     ```
     <!-- source: facts_extracted_v2.md §"Transit Gateway" -->
 
-    This takes roughly **5-8 minutes** — the Transit Gateway and its three attachments are the slow part.
+    This takes roughly **5-8 minutes** - the Transit Gateway and its three attachments are the slow part.
 
 **Expected Result:** `terraform apply` ends with `Apply complete! Resources: N added, 0 changed, 0 destroyed.` followed by an **Outputs:** block.
 
@@ -162,7 +171,7 @@ The `outputs.tf` file exposes the handful of identifiers you (and the lab toolin
     ```
     <!-- source: course_outline_v3.md §"Lab 0" -->
 
-11. **Pull individual values** with `-raw` (this is the form you will reuse constantly in later labs — it strips quotes so the value drops straight into a shell variable):
+11. **Pull individual values** with `-raw` (this is the form you will reuse constantly in later labs - it strips quotes so the value drops straight into a shell variable):
 
     ```bash
     terraform output -raw transit_gateway_id
@@ -187,13 +196,13 @@ The instances run the SSM agent and register with Systems Manager over the priva
 13. **Wait** about 5 minutes after the apply completed, then run the verifier:
 
     ```bash
-    ./verify.sh
+    bash ./verify.sh
     ```
     <!-- source: course_outline_v3.md §"Lab 0" -->
 
 14. **Read** the output. It checks, in order: both instances running; both instances Online in SSM (proves the private endpoints and endpoint SGs work); the Transit Gateway has all three attachments; spoke A can ping spoke B over the TGW; `app.lab.internal` resolves from spoke A via the Route53 private zone; Flow Logs are flowing; and the `network-operations` role exists.
 
-    If the SSM checks FAIL on the first run, the instances simply have not finished registering. Wait 2-3 minutes and re-run `./verify.sh`. A `WARN` about no Flow Log streams yet is **not** a failure — first records take about 10 minutes to deliver.
+    If the SSM checks FAIL on the first run, the instances simply have not finished registering. Wait 2-3 minutes and re-run `bash ./verify.sh`. A `WARN` about no Flow Log streams yet is **not** a failure - first records take about 10 minutes to deliver.
 
 **Expected Result:** `ALL CHECKS PASSED -- healthy baseline confirmed. You are ready for Lab 1.` If any check other than the Flow Logs WARN fails after a couple of retries, raise it with your instructor before continuing - Labs 1-4 assume a clean baseline.
 
@@ -231,7 +240,7 @@ You will live inside these instances during the troubleshooting labs, so connect
 
 **Question 2:** The instances have no public IP, no NAT gateway, and no internet gateway, yet they register with Systems Manager and you can open a shell on them. By what path does that traffic flow, and which security group rule permits it?
 
-> **Answer:** The instances reach the `ssm`, `ec2messages`, and `ssmmessages` services through **interface VPC endpoints (PrivateLink)** deployed in each spoke — the traffic never leaves the VPC boundary onto the internet. The endpoint security group allows inbound TCP 443 from the instance security group, referenced **by security-group ID** (the stateful SG-to-SG pattern), so only that spoke's instances can reach its endpoints.
+> **Answer:** The instances reach the `ssm`, `ec2messages`, and `ssmmessages` services through **interface VPC endpoints (PrivateLink)** deployed in each spoke - the traffic never leaves the VPC boundary onto the internet. The endpoint security group allows inbound TCP 443 from the instance security group, referenced **by security-group ID** (the stateful SG-to-SG pattern), so only that spoke's instances can reach its endpoints.
 
 **Question 3:** In `network.tf`, several resources use `count = local.is_labN ? 0 : 1`. In the healthy baseline you just deployed, what value does each of those `count` expressions evaluate to, and why does that matter for the rest of the course?
 
@@ -255,7 +264,7 @@ You deployed a complete, private, AWS-native network with one `terraform apply`,
 
 ## Next Steps
 
-In **Lab 1: Hub-Spoke Transit and Segmentation**, you inject your first fault 3 `scenario=lab1` removes a single VPC route, and spoke A loses its path to spoke B. You will prove the break with VPC Reachability Analyzer and Flow Logs, then repair it by editing the Terraform.
+In **Lab 1: Hub-Spoke Transit and Segmentation**, you inject your first fault - `scenario=lab1` removes a single VPC route, and spoke A loses its path to spoke B. You will prove the break with VPC Reachability Analyzer and Flow Logs, then repair it by editing the Terraform.
 
 ---
 
