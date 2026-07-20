@@ -202,26 +202,38 @@ VPC Flow Logs record an `ACCEPT` or `REJECT` verdict for traffic at each ENI. A 
 
 Reachability Analyzer is static analysis of the network configuration - it proves whether a path *can* work and, when it cannot, names the resource at fault. Run it on the **return** path, `spoke_b -> spoke_a`.
 
-8. **Create and run** the analysis on the return path. Reachability Analyzer accepts `tcp`/`udp` only (**not** `icmp`) - a missing route blocks every protocol, so `tcp` proves the routing fault just as well. The network-operations role grants the `NetworkInsights` actions for exactly this:
+8. **Create and run** the analysis on the return path. Reachability Analyzer accepts `tcp`/`udp` only (**not** `icmp`) - a missing route blocks every protocol, so `tcp` proves the routing fault just as well. The network-operations role grants the `NetworkInsights` actions for exactly this. **Run these three commands one at a time and confirm each id is populated before continuing** - an empty id means the previous call failed, so read its error before moving on:
 
     ```bash
     PATH_ID=$(aws ec2 create-network-insights-path \
       --region "$REGION" \
       --source "$B_ID" --destination "$A_ID" --protocol tcp \
       --query 'NetworkInsightsPath.NetworkInsightsPathId' --output text)
+    echo "PATH_ID=$PATH_ID"          # expect nip-...  (empty = create failed; read the error above)
+    ```
 
+    Start the analysis (needs a valid `PATH_ID`):
+
+    ```bash
     ANALYSIS_ID=$(aws ec2 start-network-insights-analysis \
       --region "$REGION" \
       --network-insights-path-id "$PATH_ID" \
       --query 'NetworkInsightsAnalysis.NetworkInsightsAnalysisId' --output text)
+    echo "ANALYSIS_ID=$ANALYSIS_ID"  # expect nia-...  (empty = start failed, usually an empty PATH_ID)
+    ```
 
-    # Wait for the analysis to finish (a few seconds), then read the result:
+    Wait a few seconds for it to finish, then read the result:
+
+    ```bash
+    sleep 8
     aws ec2 describe-network-insights-analyses \
       --region "$REGION" \
       --network-insights-analysis-ids "$ANALYSIS_ID" \
       --query 'NetworkInsightsAnalyses[0].{Status:Status,Reachable:NetworkPathFound,Explanation:Explanations[0].ExplanationCode}' \
       --output table
     ```
+
+    (If `Status` shows `running`, wait a few more seconds and re-run the last command.)
 <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
 
 > **Expected Result:** `Status` is `succeeded`, `Reachable` (NetworkPathFound) is `false`, and the explanation code names a missing route (for example `NO_ROUTE_TO_DESTINATION` / no route to destination in the source route table). That is **Fault 2**: spoke B's VPC route table has no route back to spoke A's CIDR (`10.106.1.0/24`) via the Transit Gateway. The return traffic has nowhere to go.
