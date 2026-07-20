@@ -233,11 +233,15 @@ You have two ways to restore the association. The **pedagogical fix** edits the 
 
 ## Task 7: Re-Verify
 
-17. **Confirm resolution is back** from spoke A:
+17. **Confirm resolution is back** from spoke A. Start a session:
 
     ```bash
     aws ssm start-session --target "$A_ID" --region "$REGION"
-    # inside the session:
+    ```
+
+    Then, **inside the session**, resolve the name and exit (paste these separately - the session is a new shell):
+
+    ```bash
     getent hosts app.lab.internal
     exit
     ```
