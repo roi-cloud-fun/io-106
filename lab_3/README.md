@@ -81,10 +81,11 @@ In Terraform, the zone and its associations are deliberately **separate resource
 
 ## Task 2: Inject the Fault
 
-3. **Apply** the `lab3` scenario. Replace `s01` with your assigned student id (it is also set in `terraform.tfvars`):
+3. **Apply** the `lab3` scenario. Your `student_id` is already set in `terraform.tfvars` - do **not** pass `-var student_id` on the command line: a hardcoded id renames every resource and makes Terraform try to destroy and recreate your whole stack.
 
     ```bash
-    terraform apply -var student_id=s01 -var scenario=lab3
+    terraform plan -var scenario=lab3     # ALWAYS read the plan first - this is the control the teaching note describes
+    terraform apply -var scenario=lab3
     ```
     <!-- source: course_outline_v3.md §"Lab 3" -->
 
@@ -218,7 +219,8 @@ You have two ways to restore the association. The **pedagogical fix** edits the 
 15. **Apply.** Drop the `-var scenario` flag - with the `count` guard gone, the resource exists regardless of scenario, and omitting the flag returns `scenario` to its healthy default:
 
     ```bash
-    terraform apply -var student_id=s01
+    terraform plan        # confirm: 1 to add (the restored association), 0 to destroy
+    terraform apply
     ```
     <!-- source: course_outline_v3.md §"Lab 3" -->
 
@@ -253,7 +255,7 @@ You have two ways to restore the association. The **pedagogical fix** edits the 
 
 > **Expected Result:** `ALL CHECKS PASSED -- healthy baseline confirmed.` In particular, check 5 (`app.lab.internal resolves from spoke_a`) now passes. Because you removed the guard rather than just resetting the variable, the fix lives in the Terraform and survives the next apply.
 
-> **Fast reset alternative.** If you only wanted to undo the scenario without editing code, `terraform apply -var student_id=s01 -var scenario=healthy` re-creates the association too. The difference: that path leaves the `count` guard in place, so the fault could be re-injected. Editing the code is the durable fix; resetting the variable is the rehearsal-reset.
+> **Fast reset alternative.** If you only wanted to undo the scenario without editing code, `terraform apply -var scenario=healthy` re-creates the association too. The difference: that path leaves the `count` guard in place, so the fault could be re-injected. Editing the code is the durable fix; resetting the variable is the rehearsal-reset.
 
 ---
 
