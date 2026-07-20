@@ -25,7 +25,7 @@ variable "scenario" {
     student diagnoses and fixes it by editing this Terraform:
       healthy - everything works (Lab 0 baseline)
       lab1    - spoke_a -> spoke_b broken (missing spoke_a VPC route via TGW)
-      lab2    - assuming network-operations role fails (bad trust principal)
+      lab2    - role assumes fine, but Reachability Analyzer is denied: a permissions boundary caps the role below its own policy
       lab3    - spoke_a cannot resolve lab.internal (zone not associated to spoke_a)
       lab4    - capstone: spoke_b instance SG rule missing AND spoke_b return route missing
   EOT

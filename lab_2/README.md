@@ -13,13 +13,13 @@
 
 ## Lab Overview
 
-SYF's engineers do not hold long-lived AWS keys. They sign in through Microsoft Entra ID, federate into AWS, and then **assume a scoped IAM role** in the target account. A central example is the **network-operations role** — a read-only "see everything, change nothing" role that grants network visibility across accounts.
+SYF's engineers do not hold long-lived AWS keys. They sign in through Microsoft Entra ID, federate into AWS, and then **assume a scoped IAM role** in the target account. A central example is the **network-operations role** - a read-only "see everything, change nothing" role that grants network visibility across accounts.
 
-You can assume the role just fine. The trap in this lab is subtler and far more common in a large org: you assume the role successfully, you run basic `describe` calls successfully, but the moment you reach for a specific diagnostic tool — **Reachability Analyzer** — you get `AccessDenied`. The role's own permissions policy plainly lists that action. So why are you denied?
+You can assume the role just fine. The trap in this lab is subtler and far more common in a large org: you assume the role successfully, you run basic `describe` calls successfully, but the moment you reach for a specific diagnostic tool - **Reachability Analyzer** - you get `AccessDenied`. The role's own permissions policy plainly lists that action. So why are you denied?
 
-Because a role's *effective* permissions are not just what its policy grants — they are **what its policy grants AND what every guardrail above it allows**. Here that guardrail is a **permissions boundary**: a ceiling attached to the role that caps it below its own policy. `scenario=lab2` attaches a boundary that omits the Reachability Analyzer actions, so they are denied even though the role policy allows them.
+Because a role's *effective* permissions are not just what its policy grants - they are **what its policy grants AND what every guardrail above it allows**. Here that guardrail is a **permissions boundary**: a ceiling attached to the role that caps it below its own policy. `scenario=lab2` attaches a boundary that omits the Reachability Analyzer actions, so they are denied even though the role policy allows them.
 
-In SYF's real multi-account organization, this same "ceiling above your role" is usually a **Service Control Policy (SCP)** applied at the Organization or OU level. A single training account cannot create SCPs (they require the Organizations management account), so we model the identical behavior with a permissions boundary. The troubleshooting method — *prove the policy allows it, then find the guardrail that doesn't* - is exactly the same.
+In SYF's real multi-account organization, this same "ceiling above your role" is usually a **Service Control Policy (SCP)** applied at the Organization or OU level. A single training account cannot create SCPs (they require the Organizations management account), so we model the identical behavior with a permissions boundary. The troubleshooting method - *prove the policy allows it, then find the guardrail that doesn't* - is exactly the same.
 <!-- source: facts_extracted_v2.md §"Service Control Policies" -->
 
 
@@ -28,7 +28,7 @@ In SYF's real multi-account organization, this same "ceiling above your role" is
 
 ## Scenario
 
-A teammate on the network team reports that they can sign in, assume the network-operations role, and list resources, but when they try to run **Reachability Analyzer** to trace a broken path they get `AccessDenied` — `not authorized to perform: ec2:CreateNetworkInsightsPath`. They are confused: the role is *supposed* to allow that, and they can see the permission in the role's policy. Nobody changed the role's permissions policy. You own the role. Your job is to find the failed call in CloudTrail, prove the role policy really does grant the action, then discover the guardrail that is overriding it — and repair it as code without tearing the guardrail down entirely.
+A teammate on the network team reports that they can sign in, assume the network-operations role, and list resources, but when they try to run **Reachability Analyzer** to trace a broken path they get `AccessDenied` - `not authorized to perform: ec2:CreateNetworkInsightsPath`. They are confused: the role is *supposed* to allow that, and they can see the permission in the role's policy. Nobody changed the role's permissions policy. You own the role. Your job is to find the failed call in CloudTrail, prove the role policy really does grant the action, then discover the guardrail that is overriding it - and repair it as code without tearing the guardrail down entirely.
 
 ---
 
@@ -46,12 +46,19 @@ By the end of this lab, you will:
 
 ## Task 1: Exercise the Healthy Pattern First
 
+> **Where you run everything in this lab.** All `terraform`, `verify.sh`, `aws sts`, `aws iam`, and `aws cloudtrail` commands run on your **deploy box** (`io106-<your_id>-deploy`), from the Terraform module directory `~/io-106/lab_environment/lab_env_student`. This lab leans heavily on shell variables (`$NETOPS_ARN`, `$A_ID`, `$B_ID`, and the exported `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` assumed-role credentials) - **none of which survive an SSM timeout.** If your session drops mid-lab, reconnect (**Systems Manager > Session Manager > Start session** on `io106-<your_id>-deploy`), then `cd` back and **re-run the capture block in step 1** (and re-assume the role) before continuing:
+>
+> ```bash
+> cd ~/io-106/lab_environment/lab_env_student
+> ```
+
 Before you break it, see the role doing real work so the failure is unmistakable.
 
-1. **Reconnect** to your deploy instance via SSM (`io106-<your_id>-deploy`). From `~/io-106/lab_environment/lab_env_student/`, confirm the healthy baseline and capture what you need:
+1. **From the module directory**, confirm the healthy baseline and capture what you need:
 
     ```bash
-    ./verify.sh                                              # expect ALL CHECKS PASSED
+    cd ~/io-106/lab_environment/lab_env_student
+    bash ./verify.sh                                              # expect ALL CHECKS PASSED
     NETOPS_ARN=$(terraform output -raw network_operations_role_arn)
     ROLE_NAME=$(basename "$NETOPS_ARN")
     A_ID=$(terraform output -raw spoke_a_instance_id)
@@ -77,13 +84,15 @@ Before you break it, see the role doing real work so the failure is unmistakable
     ```
 <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
 
-**Expected Result:** The `assume-role` returns temporary `ASIA...` credentials. Under them, both the `describe` and the `create-network-insights-path` succeed — the role can list the network *and* run Reachability Analyzer. (Reachability Analyzer paths only accept `tcp` or `udp`, not `icmp`.) Remember to `unset` the variables so your shell returns to your own identity.
+**Expected Result:** The `assume-role` returns temporary `ASIA...` credentials. Under them, both the `describe` and the `create-network-insights-path` succeed - the role can list the network *and* run Reachability Analyzer. (Reachability Analyzer paths only accept `tcp` or `udp`, not `icmp`.) Remember to `unset` the variables so your shell returns to your own identity.
+
+> **If `assume-role` itself returns `AccessDenied`:** your deploy box's own instance role is missing `sts:AssumeRole` on the network-operations role. That is a deploy-box setup issue, not part of the lab - raise it with your instructor before continuing.
 
 ---
 
 ## Task 2: Inject the Fault
 
-3. **Apply** the lab2 scenario. This attaches a **permissions boundary** to the network-operations role — it does not touch the role's own permissions policy:
+3. **Apply** the lab2 scenario from the module directory. This attaches a **permissions boundary** to the network-operations role - it does not touch the role's own permissions policy:
 
     ```bash
     terraform apply -var scenario=lab2
@@ -92,7 +101,7 @@ Before you break it, see the role doing real work so the failure is unmistakable
 
     Read the plan. It creates `aws_iam_policy.netops_boundary` (if not already present) and updates `aws_iam_role.network_operations` to set its `permissions_boundary`. The role's `network-visibility` policy is unchanged. Type `yes`.
 
-**Expected Result:** Apply completes. The only meaningful change is that the network-operations role now has a permissions boundary attached. Its permissions policy — and every network resource — is untouched.
+**Expected Result:** Apply completes. The only meaningful change is that the network-operations role now has a permissions boundary attached. Its permissions policy - and every network resource - is untouched.
 
 ---
 
@@ -126,7 +135,7 @@ This is the confusing part, and it is the whole point: you can assume the role, 
 
 ## Task 4: Diagnose with CloudTrail
 
-CloudTrail records the failed call with the caller, the action, and the error — the "who/what/when" you would attach to a ticket.
+CloudTrail records the failed call with the caller, the action, and the error - the "who/what/when" you would attach to a ticket.
 
 5. **Open** the AWS console and go to **CloudTrail > Event history**, or query from the CLI (under your own identity):
 
@@ -139,7 +148,7 @@ CloudTrail records the failed call with the caller, the action, and the error �
 
 6. **Read** the event JSON. Confirm `errorCode` is `AccessDenied` / `Client.UnauthorizedOperation`, and note the `userIdentity` is your assumed `netops` session and the action is `CreateNetworkInsightsPath`.
 
-**Expected Result:** You find a `CreateNetworkInsightsPath` event with an authorization-failure `errorCode`, made by your assumed network-operations session. CloudTrail confirms the *what* and *who*. It does not, by itself, explain *why* a role whose policy allows the action was refused — for that you compare the role's policy against its guardrail next. (CloudTrail Event history can lag a few minutes; if it is not visible yet, proceed and check back.)
+**Expected Result:** You find a `CreateNetworkInsightsPath` event with an authorization-failure `errorCode`, made by your assumed network-operations session. CloudTrail confirms the *what* and *who*. It does not, by itself, explain *why* a role whose policy allows the action was refused - for that you compare the role's policy against its guardrail next. (CloudTrail Event history can lag a few minutes; if it is not visible yet, proceed and check back.)
 
 ---
 
@@ -188,7 +197,7 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
 ```
 <!-- source: facts_extracted_v2.md §"Service Control Policies" -->
 
-10. **Edit** `iam.tf`. Detach the boundary from the role by setting it to `null` regardless of scenario:
+10. **In the module directory, edit** `iam.tf`. Detach the boundary from the role by setting it to `null` regardless of scenario:
 
     ```hcl
     permissions_boundary = null
@@ -210,9 +219,9 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
     ```
 <!-- source: course_outline_v3.md §"Lab 2" -->
 
-> **Note:** `terraform apply -var scenario=healthy` is the quick reset and also detaches the boundary. Editing the attachment is the realistic repair — you corrected the role so its policy is no longer capped.
+> **Note:** `terraform apply -var scenario=healthy` is the quick reset and also detaches the boundary. Editing the attachment is the realistic repair - you corrected the role so its policy is no longer capped.
 
-> **Do not over-fix.** The temptation is to "make it work" by widening the boundary to `"Action": "*"` or deleting it entirely without thinking. A permissions boundary (like an SCP) is a deliberate guardrail — the right fix is to allow the *specific* actions the role legitimately needs, not to remove the ceiling wholesale. Here the boundary should simply not have applied to this role at all; in production you would instead get the role's OU or the SCP adjusted through change control.
+> **Do not over-fix.** The temptation is to "make it work" by widening the boundary to `"Action": "*"` or deleting it entirely without thinking. A permissions boundary (like an SCP) is a deliberate guardrail - the right fix is to allow the *specific* actions the role legitimately needs, not to remove the ceiling wholesale. Here the boundary should simply not have applied to this role at all; in production you would instead get the role's OU or the SCP adjusted through change control.
 
 **Expected Result:** Apply completes. `get-role` now shows no permissions boundary, and the role's effective permissions equal its policy again.
 
@@ -220,7 +229,7 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
 
 ## Task 7: Re-Verify
 
-13. **Assume** the role and re-run Reachability Analyzer — it should work again:
+13. **Assume** the role and re-run Reachability Analyzer - it should work again:
 
     ```bash
     CREDS=$(aws sts assume-role --role-arn "$NETOPS_ARN" --role-session-name netops \
@@ -250,37 +259,37 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
 | You detach the boundary in Terraform | The SCP change is requested and approved through **ServiceNow**, governed by the **SIAM** process |
 | Effective permission = identity policy AND boundary | Effective permission = identity policy AND **every** SCP on the path AND any boundary |
 
-The troubleshooting method is identical regardless of which guardrail is in play: confirm the identity policy grants the action, then walk *up* — permissions boundary, then SCPs — until you find the layer that does not. A single training account cannot host an Organization, so the permissions boundary stands in for the SCP; the reasoning transfers exactly.
+The troubleshooting method is identical regardless of which guardrail is in play: confirm the identity policy grants the action, then walk *up* - permissions boundary, then SCPs - until you find the layer that does not. A single training account cannot host an Organization, so the permissions boundary stands in for the SCP; the reasoning transfers exactly.
 
 ---
 
 ## Knowledge Check
 
-**Question 1:** You assumed the role successfully and `ec2:DescribeRouteTables` worked, but `ec2:CreateNetworkInsightsPath` was denied — and the role's permissions policy clearly grants `ec2:CreateNetworkInsightsPath`. What does that combination tell you about where the denial comes from, before you look at anything else?
+**Question 1:** You assumed the role successfully and `ec2:DescribeRouteTables` worked, but `ec2:CreateNetworkInsightsPath` was denied - and the role's permissions policy clearly grants `ec2:CreateNetworkInsightsPath`. What does that combination tell you about where the denial comes from, before you look at anything else?
 
 <details><summary>Answer</summary>
 
-> **Answer:** If you could assume the role, the trust policy is fine. If a `describe` worked, your credentials and the role's basic policy are fine. So a denial on one specific action that the role's policy *does* grant cannot be coming from the identity policy — it must come from a layer that further restricts the role: a **permissions boundary** (or, in an org, an **SCP**). Effective permissions are the *intersection* of the identity policy and every guardrail above it, so an action must be allowed in *all* layers to succeed.
+> **Answer:** If you could assume the role, the trust policy is fine. If a `describe` worked, your credentials and the role's basic policy are fine. So a denial on one specific action that the role's policy *does* grant cannot be coming from the identity policy - it must come from a layer that further restricts the role: a **permissions boundary** (or, in an org, an **SCP**). Effective permissions are the *intersection* of the identity policy and every guardrail above it, so an action must be allowed in *all* layers to succeed.
 </details>
 
 **Question 2:** A colleague "fixes" the AccessDenied by editing the boundary to `"Action": "*"`. Why is that the wrong remediation, and what is the correct one?
 
 <details><summary>Answer</summary>
     
-> **Answer:** `"Action": "*"` removes the ceiling entirely — the boundary (or SCP) exists on purpose to cap what the role can ever do, and blowing it open defeats that control for every action, not just the one you needed. The correct fix is to make the role no longer subject to a boundary that does not belong on it (detach it), or to allow the *specific* legitimate actions in the guardrail. You restore the intended control surface; you do not delete it.
+> **Answer:** `"Action": "*"` removes the ceiling entirely - the boundary (or SCP) exists on purpose to cap what the role can ever do, and blowing it open defeats that control for every action, not just the one you needed. The correct fix is to make the role no longer subject to a boundary that does not belong on it (detach it), or to allow the *specific* legitimate actions in the guardrail. You restore the intended control surface; you do not delete it.
 </details>
 
-**Question 3:** In SYF's real multi-account organization, you hit the same symptom — an action allowed by a role's policy is denied. You confirm there is no permissions boundary on the role. Where do you look next, and why is the method the same as in this lab?
+**Question 3:** In SYF's real multi-account organization, you hit the same symptom - an action allowed by a role's policy is denied. You confirm there is no permissions boundary on the role. Where do you look next, and why is the method the same as in this lab?
 
 <details><summary>Answer</summary>
     
-> **Answer:** You look at the **SCPs** applied to the account's Organization/OU. SCPs are a guardrail above every role in the account, exactly like a permissions boundary is a guardrail on a single role — effective permission is still the intersection of the identity policy and every guardrail. The method is unchanged: prove the identity policy allows the action, then walk up the guardrail layers until you find the one that does not. The permissions boundary in this lab is the single-account stand-in for that SCP layer.
+> **Answer:** You look at the **SCPs** applied to the account's Organization/OU. SCPs are a guardrail above every role in the account, exactly like a permissions boundary is a guardrail on a single role - effective permission is still the intersection of the identity policy and every guardrail. The method is unchanged: prove the identity policy allows the action, then walk up the guardrail layers until you find the one that does not. The permissions boundary in this lab is the single-account stand-in for that SCP layer.
 </details>
 ---
 
 ## Summary
 
-You assumed the network-operations role and ran Reachability Analyzer successfully, then injected a permissions-boundary fault that left the role assumable and its policy intact yet silently capped one privileged action. You traced the denial through CloudTrail, proved the role's policy granted the action, found the permissions boundary that overrode it, and detached it as code — without tearing the guardrail open. You saw that effective permissions are the intersection of a role's policy and every guardrail above it, and how a permissions boundary here stands in for an SCP in SYF's real Organizations-governed environment.
+You assumed the network-operations role and ran Reachability Analyzer successfully, then injected a permissions-boundary fault that left the role assumable and its policy intact yet silently capped one privileged action. You traced the denial through CloudTrail, proved the role's policy granted the action, found the permissions boundary that overrode it, and detached it as code - without tearing the guardrail open. You saw that effective permissions are the intersection of a role's policy and every guardrail above it, and how a permissions boundary here stands in for an SCP in SYF's real Organizations-governed environment.
 
 ## Completion Checklist
 
@@ -293,7 +302,7 @@ You assumed the network-operations role and ran Reachability Analyzer successful
 
 ## Next Steps
 
-In **Lab 3: Private Connectivity - Endpoints and DNS**, you return to the data plane: a Route 53 private hosted zone that one spoke can no longer resolve. You will diagnose the NXDOMAIN, find the missing zone association, and repair it — the private DNS pattern behind SYF's centralized endpoint and Route 53 model.
+In **Lab 3: Private Connectivity - Endpoints and DNS**, you return to the data plane: a Route 53 private hosted zone that one spoke can no longer resolve. You will diagnose the NXDOMAIN, find the missing zone association, and repair it - the private DNS pattern behind SYF's centralized endpoint and Route 53 model.
 
 ---
 
