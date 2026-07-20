@@ -111,6 +111,9 @@ Before you break it, see the role doing real work so the failure is unmistakable
 4. **Assume** the role again and try the same two calls as in Task 1:
 
     ```bash
+    NETOPS_ARN=$(terraform output -raw network_operations_role_arn)   # re-derive Task 1's vars in case you reconnected
+    A_ID=$(terraform output -raw spoke_a_instance_id)
+    B_ID=$(terraform output -raw spoke_b_instance_id)
     CREDS=$(aws sts assume-role --role-arn "$NETOPS_ARN" --role-session-name netops \
       --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text)
     export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | cut -f1)
@@ -239,6 +242,9 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
 13. **Assume** the role and re-run Reachability Analyzer - it should work again:
 
     ```bash
+    NETOPS_ARN=$(terraform output -raw network_operations_role_arn)   # re-derive Task 1's vars in case you reconnected
+    A_ID=$(terraform output -raw spoke_a_instance_id)
+    B_ID=$(terraform output -raw spoke_b_instance_id)
     CREDS=$(aws sts assume-role --role-arn "$NETOPS_ARN" --role-session-name netops \
       --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text)
     export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | cut -f1)
