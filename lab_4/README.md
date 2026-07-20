@@ -126,7 +126,11 @@ Fix only one and the path stays down. That is the whole point.
 
     ```bash
     aws ssm start-session --target "$A_ID" --region "$REGION"
-    # inside the session (use the spoke B IP printed in Task 1):
+    ```
+
+    Then, **inside the session**, ping spoke B and exit (paste these separately - the session is a new shell; use the spoke B IP printed in Task 1):
+
+    ```bash
     ping -c 3 -W 2 <B_IP>
     exit
     ```
@@ -288,7 +292,11 @@ Diagnosis is done from read-only. The fix happens with your own identity, in cod
 
     ```bash
     aws ssm start-session --target "$A_ID" --region "$REGION"
-    # inside the session:
+    ```
+
+    Then, **inside the session**, ping spoke B and exit (paste separately - the session is a new shell):
+
+    ```bash
     ping -c 3 -W 2 <B_IP>
     exit
     ```
