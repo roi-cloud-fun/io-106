@@ -43,16 +43,15 @@ By the end of this lab, you will:
 
 > **Where you run everything in this lab.** All `terraform`, `verify.sh`, and `aws` commands run on your **deploy box** (`io106-<your_id>-deploy`), from the Terraform module directory `~/io-106/lab_environment/lab_env_student` - not your laptop, and not inside a spoke instance. The only commands that run inside a spoke instance are the ones explicitly labelled `# inside the spoke A session`.
 >
-> SSM sessions time out after a period of inactivity (about 20 minutes by default). If your session dropped since Lab 0, reconnect before continuing - **Systems Manager > Session Manager > Start session** on `io106-<your_id>-deploy` - then return to the module directory. Note that shell variables (like the `$A_ID` and `$B_IP` you set below) do **not** survive a reconnect: if you reconnect mid-lab, re-run the capture block in Task 2.
+> SSM sessions time out after a period of inactivity (your instructor has set this to 60 minutes; the AWS default is 20). If your session dropped since Lab 0, reconnect before continuing - **Systems Manager > Session Manager > Start session** on `io106-<your_id>-deploy` - then return to the module directory. Note that shell variables (like the `$A_ID` and `$B_IP` you set below) do **not** survive a reconnect: if you reconnect mid-lab, re-run the capture block in Task 2.
 >
 > ```bash
 > cd ~/io-106/lab_environment/lab_env_student
 > ```
 
-1. **From the module directory**, confirm your baseline is still healthy before you break it (the `cd` is safe to re-run if you just reconnected):
+1. **Confirm your baseline is still healthy** before you break it. Your deploy box logs you straight into the module directory, so there is nothing to `cd` into unless you wandered off (the note above has the path if you need it):
 
     ```bash
-    cd ~/io-106/lab_environment/lab_env_student
     bash ./verify.sh
     ```
     <!-- source: course_outline_v3.md §"Lab 1" -->

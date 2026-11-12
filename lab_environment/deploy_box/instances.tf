@@ -126,20 +126,28 @@ resource "aws_instance" "deploy" {
     # SSM-SessionManagerRunShell document (runAsDefaultUser = ec2-user); this
     # profile.d file is the belt-and-braces so ANY login shell at least gets
     # the region and a pointer to the module.
-    echo 'cd ~/io-106/lab_environment/lab_env_student' >> /home/ec2-user/.bashrc
-    echo 'export AWS_DEFAULT_REGION=${var.region}' >> /home/ec2-user/.bashrc
     echo "${each.value}" > /home/ec2-user/.io106-student-id
 
+    # Do NOT hardcode a region into the shell. The student chooses `region` in
+    # their own terraform.tfvars, and if the shell disagrees then any lab command
+    # that omits --region fails against a perfectly healthy stack --
+    # `aws ssm start-session` returns TargetNotConnected, which looks like a
+    # broken instance and is not. So derive the region from their tfvars at every
+    # login, and fall back to this box's region only before they have set one.
     cat > /etc/profile.d/io106.sh <<'PROFILE'
-    export AWS_DEFAULT_REGION=${var.region}
-    if [ -d "$HOME/io-106/lab_environment/lab_env_student" ]; then
-      cd "$HOME/io-106/lab_environment/lab_env_student"
-    elif [ "$(id -un)" != "ec2-user" ]; then
-      echo "IO-106: you are $(id -un), but the lab files live in ec2-user's home."
-      echo "        Run:  sudo su - ec2-user"
-    fi
-    PROFILE
-    sed -i 's/^    //' /etc/profile.d/io106.sh
+MOD="$HOME/io-106/lab_environment/lab_env_student"
+if [ -d "$MOD" ]; then
+  cd "$MOD"
+  _r=$(awk -F'"' '/^[[:space:]]*region[[:space:]]*=/{print $2; exit}' "$MOD/terraform.tfvars" 2>/dev/null)
+  export AWS_DEFAULT_REGION="$${_r:-${var.region}}"
+  unset _r
+elif [ "$(id -un)" != "ec2-user" ]; then
+  echo "IO-106: you are $(id -un), but the lab files live in ec2-user's home."
+  echo "        Run:  sudo su - ec2-user"
+else
+  export AWS_DEFAULT_REGION="${var.region}"
+fi
+PROFILE
     chmod 0644 /etc/profile.d/io106.sh
 
     chown -R ec2-user:ec2-user /home/ec2-user

@@ -54,10 +54,9 @@ By the end of this lab, you will:
 
 Before you break it, see the role doing real work so the failure is unmistakable.
 
-1. **From the module directory**, confirm the healthy baseline and capture what you need:
+1. **Confirm the healthy baseline and capture what you need.** Your deploy box logs you straight into the module directory, so there is nothing to `cd` into unless you wandered off (the note above has the path if you need it):
 
     ```bash
-    cd ~/io-106/lab_environment/lab_env_student
     bash ./verify.sh                                              # expect ALL CHECKS PASSED
     NETOPS_ARN=$(terraform output -raw network_operations_role_arn)
     ROLE_NAME=$(basename "$NETOPS_ARN")
@@ -155,8 +154,11 @@ CloudTrail records the failed call with the caller, the action, and the error - 
     # one readable line per matching event (jq is pre-installed on the deploy box):
     jq -r '.Events[] | (.CloudTrailEvent|fromjson) | "\(.eventTime)  errorCode=\(.errorCode // "-")  caller=\(.userIdentity.arn // "-")"' events.json
     ```
+<!-- source: https://docs.aws.amazon.com/cli/latest/reference/cloudtrail/ -->
 
-    You should see two `CreateNetworkInsightsPath` lines: the **successful** create from Task 1 (`errorCode=-`) and the **denied** one from Task 3 (`errorCode=Client.UnauthorizedOperation`, or `AccessDenied`). No `jq`? Find the denial without scrolling: `grep -o '"errorCode":"[^"]*"' events.json`.
+    You should see two `CreateNetworkInsightsPath` lines: the **successful** create from Task 1 (`errorCode=-`) and the **denied** one from Task 3 (`errorCode=Client.UnauthorizedOperation`, or `AccessDenied`). No `jq`? Find the denial without scrolling: `grep -o 'errorCode[^,]*' events.json`.
+
+    > **If the denied call is not there yet, you have not done anything wrong.** CloudTrail management events typically take **5-15 minutes** to become searchable in Event history. If you only see the successful create from Task 1, wait a few minutes and re-run the `lookup-events` command - the denial will appear.
 <!-- source: facts_extracted_v2.md §"CloudTrail for Access Troubleshooting" -->
 
 6. **Read the denied event.** Confirm the denied line's `errorCode` is `Client.UnauthorizedOperation` / `AccessDenied`. For its full context, open `events.json` or run `jq '.Events[] | (.CloudTrailEvent|fromjson) | select(.errorCode)' events.json`: note the `userIdentity` is your assumed `netops` session and `eventName` is `CreateNetworkInsightsPath`.
