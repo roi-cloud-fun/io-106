@@ -193,6 +193,24 @@ In Terraform, the zone and its associations are deliberately **separate resource
 
 ## Task 5: Confirm the Root Cause in Route 53
 
+> [!IMPORTANT]
+> **Everything from here runs on the DEPLOY BOX, not inside a spoke.** If you
+> skipped the `exit` above you are still in the spoke, and these commands fail in
+> confusing ways rather than refusing: `terraform.tfvars` is "No such file",
+> `$REGION` is empty so endpoint URLs come out malformed with a missing region
+> (`ec2..amazonaws.com`), and any
+> AWS call **hangs and times out** because a spoke has no route to the AWS APIs.
+>
+> One command settles it:
+>
+> ```bash
+> hostname -I
+> ```
+>
+> `10.106.250.x` = deploy box, carry on. `10.106.1.x` or `10.106.2.x` = still in a
+> spoke, type `exit` first.
+
+
 You can confirm the missing association from the console or the CLI. Use whichever you prefer; both read the same truth.
 
 **Console path:**
@@ -302,6 +320,23 @@ You have two ways to restore the association. The **pedagogical fix** edits the 
     <!-- source: facts_extracted_v2.md §"Interface Endpoints (PrivateLink)" -->
 
 > **Expected Result:** Spoke A now prints `10.106.1.x  app.lab.internal`.
+
+> [!IMPORTANT]
+> **Everything from here runs on the DEPLOY BOX, not inside a spoke.** If you
+> skipped the `exit` above you are still in the spoke, and these commands fail in
+> confusing ways rather than refusing: `terraform.tfvars` is "No such file",
+> `$REGION` is empty so endpoint URLs come out malformed with a missing region
+> (`ec2..amazonaws.com`), and any
+> AWS call **hangs and times out** because a spoke has no route to the AWS APIs.
+>
+> One command settles it:
+>
+> ```bash
+> hostname -I
+> ```
+>
+> `10.106.250.x` = deploy box, carry on. `10.106.1.x` or `10.106.2.x` = still in a
+> spoke, type `exit` first.
 
 18. **Run the full health check:**
 

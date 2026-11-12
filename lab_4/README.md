@@ -156,6 +156,23 @@ Fix only one and the path stays down. That is the whole point.
 
 A SYF network engineer investigates with read-only visibility, not admin. Assume the `network-operations` role and work from its temporary credentials - exactly the pattern you exercised in Lab 2.
 
+> [!IMPORTANT]
+> **Everything from here runs on the DEPLOY BOX, not inside a spoke.** If you
+> skipped the `exit` above you are still in the spoke, and these commands fail in
+> confusing ways rather than refusing: `terraform.tfvars` is "No such file",
+> `$REGION` is empty so endpoint URLs come out malformed with a missing region
+> (`ec2..amazonaws.com`), and any
+> AWS call **hangs and times out** because a spoke has no route to the AWS APIs.
+>
+> One command settles it:
+>
+> ```bash
+> hostname -I
+> ```
+>
+> `10.106.250.x` = deploy box, carry on. `10.106.1.x` or `10.106.2.x` = still in a
+> spoke, type `exit` first.
+
 5. **Assume** the role and export the temporary STS credentials into your shell:
 
     ```bash
@@ -377,6 +394,23 @@ Diagnosis is done from read-only. The fix happens with your own identity, in cod
     <!-- source: course_outline_v3.md §"Lab 4" -->
 
 > **Expected Result:** Replies, 0% packet loss. Both the inbound SG admit and the return route are in place, so the round trip completes.
+
+> [!IMPORTANT]
+> **Everything from here runs on the DEPLOY BOX, not inside a spoke.** If you
+> skipped the `exit` above you are still in the spoke, and these commands fail in
+> confusing ways rather than refusing: `terraform.tfvars` is "No such file",
+> `$REGION` is empty so endpoint URLs come out malformed with a missing region
+> (`ec2..amazonaws.com`), and any
+> AWS call **hangs and times out** because a spoke has no route to the AWS APIs.
+>
+> One command settles it:
+>
+> ```bash
+> hostname -I
+> ```
+>
+> `10.106.250.x` = deploy box, carry on. `10.106.1.x` or `10.106.2.x` = still in a
+> spoke, type `exit` first.
 
 17. **Run** the full health check:
 
