@@ -245,9 +245,13 @@ Reachability Analyzer is static analysis of the network configuration - it prove
 9. **(Optional) Confirm directly** that the route is missing by inspecting spoke B's route table - the role can describe it:
 
     ```bash
-    aws ec2 describe-route-tables --region "$REGION" \
-      --filters "Name=tag:Name,Values=io106-*-spoke_b-rt" \
-      --query 'RouteTables[0].Routes[].DestinationCidrBlock' --output text
+    B_SUBNET=$(aws ec2 describe-instances --region "$REGION" --instance-ids "$B_ID" --query 'Reservations[0].Instances[0].SubnetId' --output text)
+    echo "spoke B subnet=$B_SUBNET"
+    ```
+    <!-- source: facts_extracted_v2.md §"Subnets" -->
+
+    ```bash
+    aws ec2 describe-route-tables --region "$REGION" --filters "Name=association.subnet-id,Values=$B_SUBNET" --query 'RouteTables[0].Routes[].DestinationCidrBlock' --output text
     ```
     <!-- source: facts_extracted_v2.md §"Route Tables" -->
 

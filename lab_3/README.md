@@ -184,9 +184,8 @@ You can confirm the missing association from the console or the CLI. Use whichev
 > **Expected Result:** Two VPC IDs are returned. Cross-check them against your VPCs:
 >
 > ```bash
-> aws ec2 describe-vpcs --region "$REGION" \
->   --filters "Name=tag:Name,Values=io106-*-vpc" \
->   --query 'Vpcs[].[Tags[?Key==`Name`].Value|[0],VpcId]' --output text
+> ID=$(awk -F'"' '/^[[:space:]]*student_id/{print $2}' terraform.tfvars)
+> aws ec2 describe-vpcs --region "$REGION" --filters "Name=tag:Name,Values=io106-$ID-*" --query 'Vpcs[].[Tags[?Key==`Name`].Value|[0],VpcId]' --output text
 > ```
 >
 > The spoke A VPC (`io106-<id>-spoke_a-vpc`) is absent from the zone's VPC list. Diagnosis confirmed: `aws_route53_zone_association.spoke_a` is missing.
