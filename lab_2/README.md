@@ -98,13 +98,17 @@ Before you break it, see the role doing real work so the failure is unmistakable
     Now configure the role as a **named profile** and use that for the rest of the lab. This is how a jump box is really set up, and it avoids exporting credentials into your shell at all:
 
     ```bash
-    mkdir -p ~/.aws
-    { echo "[profile netops]"; echo "role_arn = $NETOPS_ARN"; echo "credential_source = Ec2InstanceMetadata"; echo "region = $REGION"; } > ~/.aws/config
+    aws configure set role_arn "$NETOPS_ARN" --profile netops
+    aws configure set credential_source Ec2InstanceMetadata --profile netops
+    aws configure set region "$REGION" --profile netops
     cat ~/.aws/config
     ```
     <!-- source: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html -->
 
-    That prints the file back so you can see the role ARN and region were substituted. Writing the file with `>` rather than appending means re-running it is safe - you cannot end up with the profile defined twice. (Your deploy box has no other AWS profiles, so there is nothing to overwrite.)
+    `aws configure set` edits only the `[profile netops]` section, so it is safe to
+    re-run and - importantly - it leaves the rest of `~/.aws/config` alone,
+    including the default `region` you set in Lab 0 Task 3. The `cat` shows you
+    both sections: your default region, and the new `netops` profile.
 
     Now confirm which identity that profile gives you:
 
