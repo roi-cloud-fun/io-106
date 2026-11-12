@@ -228,7 +228,7 @@ region matching `$AWS_DEFAULT_REGION`, and `scenario = "healthy"`.
     ```
     <!-- source: course_outline_v3.md §"Lab 0" -->
 
-    Read the summary line at the bottom - something like `Plan: 60 to add, 0 to change, 0 to destroy`. A plan that only *adds* (nothing to change or destroy) is what you expect on a first deploy. Reading the plan before every apply is a core Terraform discipline: it is your change-preview gate.
+    Read the summary line at the bottom - something like `Plan: 78 to add, 0 to change, 0 to destroy`. A plan that only *adds* (nothing to change or destroy) is what you expect on a first deploy. Reading the plan before every apply is a core Terraform discipline: it is your change-preview gate.
 
 9. **Apply** the configuration. Terraform prints the plan again and asks for confirmation; type `yes`:
 
@@ -382,6 +382,23 @@ whoami && pwd
 
 If that returns `ec2-user` and the `lab_env_student` path, you are fine - carry on. (Your instructor can set a proper prompt for everyone; it is cosmetic.) Tell your instructor if `whoami` says `ssm-user`, though - that one is a real Session Manager preference to fix, not something you should work around every session.
 
+### `verify.sh` says a spoke instance's SSM PingStatus is `None`
+
+Usually seen together with "ping check inconclusive" and "app.lab.internal did not resolve" - all three are the **same** problem, because those two checks run *inside* that instance over SSM. If the other spoke is `Online`, the endpoints are fine.
+
+What happened: the SSM agent started before its interface endpoints were ready, failed to connect, and backed off. It retries, but the backoff can run for many minutes. Measured on a clean deploy: one spoke was still `None` **six minutes** after launch while the other registered normally.
+
+Give it 2-3 minutes and re-run `./verify.sh`. If it is still `None`, force the agent to retry immediately by restarting the instance - 20 seconds was enough:
+
+```bash
+INST=$(terraform output -raw spoke_a_instance_id)
+aws ec2 stop-instances --region "$(terraform output -raw region)" --instance-ids "$INST"
+aws ec2 start-instances --region "$(terraform output -raw region)" --instance-ids "$INST"
+```
+<!-- source: facts_extracted_v2.md §"Interface Endpoints (PrivateLink)" -->
+
+Nothing is wrong with your stack and you do not need to re-apply. The Terraform now orders the instances after their endpoints to prevent this, so it should not happen on a fresh deploy.
+
 ### An `aws` command hangs, then times out (instead of erroring)
 
 You are running it **inside a spoke instance** instead of on the deploy box. The spoke VPCs are fully private and carry only the `ssm`, `ec2messages` and `ssmmessages` interface endpoints - there is **no `ec2` API endpoint**, no NAT and no internet gateway - so a call like `aws ec2 describe-route-tables` has nowhere to go and simply waits until it gives up. (The spoke instance role carries only `AmazonSSMManagedInstanceCore` as well, so it would have no permission even if the request could get out.)
@@ -404,7 +421,7 @@ Expected, and not a failure - the script says so itself. VPC Flow Logs take up t
 
 ## Knowledge Check
 
-**Question 1:** Your `terraform plan` before the first apply shows `Plan: 60 to add, 0 to change, 0 to destroy`. Later, after you fix a fault in Lab 1, a plan shows `1 to add, 0 to change, 0 to destroy`. What does the second plan tell you about the difference between current state and desired configuration?
+**Question 1:** Your `terraform plan` before the first apply shows `Plan: 78 to add, 0 to change, 0 to destroy`. Later, after you fix a fault in Lab 1, a plan shows `1 to add, 0 to change, 0 to destroy`. What does the second plan tell you about the difference between current state and desired configuration?
 
 > **Answer:** A plan reconciles real state against the configuration. `1 to add` means exactly one resource declared in the configuration does not currently exist in state - Terraform will create it to converge. After a fault that removed one route, that single missing resource is the route you are restoring. The `0 to change / 0 to destroy` confirms nothing else drifts as a side effect.
 
