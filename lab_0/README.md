@@ -214,8 +214,26 @@ Every named resource is prefixed `io106-<student_id>-` so all eight students sha
     > the wrong place and report your instances as missing. That failure is
     > confusing and entirely avoidable here.
 
-**Expected Result:** `terraform.tfvars` contains your assigned `student_id`, the
-region matching `$AWS_DEFAULT_REGION`, and `scenario = "healthy"`.
+    **Now tell the AWS CLI the same region, permanently** - immediately after writing `terraform.tfvars`:
+
+    ```bash
+    aws configure set region "$(terraform output -raw region 2>/dev/null || awk -F'"' '/^[[:space:]]*region/{print $2}' terraform.tfvars)"
+    aws configure get region
+    ```
+    <!-- source: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html -->
+
+    This writes the region into `~/.aws/config`, which means **every** `aws` command for the rest of the course targets your stack's region without you passing `--region`. It persists across reconnects and across `sudo su`, unlike an environment variable.
+
+    > **Why this matters.** Without it, the AWS CLI on an EC2 instance falls
+    > back to **that instance's own region** (via instance metadata). Your deploy
+    > box is not necessarily in the same region as the stack you are about to
+    > build - and a command that silently asks the wrong region gets a truthful
+    > "no such instance" back. The classic symptom is
+    > `aws ssm start-session` returning **`TargetNotConnected`** for an instance
+    > that is perfectly healthy, which sends people hunting a network fault that
+    > does not exist. Two minutes here saves that.
+
+**Expected Result:** `terraform.tfvars` contains your assigned `student_id`, your region, and `scenario = "healthy"`; and `aws configure get region` prints that same region.
 
 ---
 

@@ -128,26 +128,31 @@ resource "aws_instance" "deploy" {
     # the region and a pointer to the module.
     echo "${each.value}" > /home/ec2-user/.io106-student-id
 
-    # Do NOT hardcode a region into the shell. The student chooses `region` in
-    # their own terraform.tfvars, and if the shell disagrees then any lab command
-    # that omits --region fails against a perfectly healthy stack --
-    # `aws ssm start-session` returns TargetNotConnected, which looks like a
-    # broken instance and is not. So derive the region from their tfvars at every
-    # login, and fall back to this box's region only before they have set one.
+    # Region lives in ~/.aws/config, NOT in the environment.
+    #
+    # This file used to export AWS_DEFAULT_REGION, derived from the student's
+    # terraform.tfvars. That cannot work: profile.d runs at LOGIN, and the
+    # student does not create terraform.tfvars until Lab 0 Task 3 -- after they
+    # have logged in. So the very first session always captured the box's region
+    # instead of the stack's, and an exported env var BEATS ~/.aws/config in the
+    # CLI's precedence order, so it then overrode the correct value too.
+    # Symptom: `aws ssm start-session` returns TargetNotConnected against a
+    # perfectly healthy instance (measured twice, 2026-11-12).
+    #
+    # Fix: export nothing. Lab 0 Task 3 runs `aws configure set region ...` right
+    # after writing terraform.tfvars, which persists to ~/.aws/config, survives
+    # reconnects and `sudo su`, and applies to every aws command without a flag.
+    # Before that point no lab command needs a region, and the CLI falls back to
+    # this instance's own region via IMDS.
     cat > /etc/profile.d/io106.sh <<'PROFILE'
     MOD="$HOME/io-106/lab_environment/lab_env_student"
     if [ -d "$MOD" ]; then
       cd "$MOD"
-      _r=$(awk -F'"' '/^[[:space:]]*region[[:space:]]*=/{print $2; exit}' "$MOD/terraform.tfvars" 2>/dev/null)
-      export AWS_DEFAULT_REGION="$${_r:-${var.region}}"
-      unset _r
     elif [ "$(id -un)" != "ec2-user" ]; then
       echo "IO-106: you are $(id -un), but the lab files live in ec2-user's home."
       echo "        Run:  sudo su - ec2-user"
-    else
-      export AWS_DEFAULT_REGION="${var.region}"
     fi
-    
+
     # Session Manager starts its shell with PS1 unset, and AL2023's /etc/bashrc only
     # sets a prompt when PS1 is already non-empty -- so bash falls back to its
     # built-in "\s-\v\$" and students see a bare "sh-5.2$" with no user, host or
