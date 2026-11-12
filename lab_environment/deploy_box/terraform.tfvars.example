@@ -1,0 +1,25 @@
+# IO-106 deploy boxes -- INSTRUCTOR module. Copy to terraform.tfvars.
+#
+# One entry per student. All boxes share one VPC + one NAT gateway, so list the
+# whole cohort here rather than applying this module once per student.
+
+# Instructor-only smoke test (what was used on 2026-11-12):
+student_ids = ["user50"]
+region      = "us-east-2"
+
+# THE REAL COHORT -- uncomment this before class. user01..user10 are the
+# students; user50 is the instructor. Adding ids is additive (the instances are
+# keyed by student_id with for_each), so scaling up from the smoke test does NOT
+# replace the instructor box that is already running.
+# student_ids = [
+#   "user01", "user02", "user03", "user04", "user05",
+#   "user06", "user07", "user08", "user09", "user10",
+#   "user50",
+# ]
+
+# Defaults below rarely need changing:
+# vpc_cidr                 = "10.106.250.0/24"
+# instance_type            = "t3.small"
+# repo_url                 = "https://github.com/roi-cloud-fun/io-106.git"
+# repo_branch              = "trunk"
+# lab_operator_policy_name = "IO106LabOperator"   # account id resolved at plan time
