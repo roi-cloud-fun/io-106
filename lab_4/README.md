@@ -122,6 +122,17 @@ Fix only one and the path stays down. That is the whole point.
 
 ## Task 2: Reproduce the Symptom
 
+> [!CAUTION]
+> **The failure in this task is SUPPOSED to happen. You have not broken anything.**
+>
+> The ping below will time out - **100% packet loss**. That is the symptom you
+> came here to reproduce, and it means the compound fault injected in Task 1 is
+> working.
+>
+> Do not re-run `terraform apply` and do not go looking for a mistake. Remember
+> this is the capstone: there is **more than one** root cause behind this single
+> symptom, and fixing only one of them leaves the ping exactly as broken.
+
 4. **Start** a Session Manager shell on spoke A and try to reach spoke B:
 
     ```bash

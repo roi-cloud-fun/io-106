@@ -102,6 +102,20 @@ By the end of this lab, you will:
 
 ## Task 3: Reproduce the Symptom
 
+> [!CAUTION]
+> **The failure in this task is SUPPOSED to happen. You have not broken anything.**
+>
+> The ping below will time out - **100% packet loss, no replies**. That is the
+> symptom you came here to reproduce: it is the developer's "it just hangs", and
+> it means the fault injected in Task 2 is working.
+>
+> Do not re-run `terraform apply` and do not go looking for a mistake. The point
+> of the next task is that the symptom alone does **not** tell you whether a
+> route, a security group, or the instance is at fault - you have to go and find
+> out.
+>
+> The only result that would mean something is wrong is the ping **succeeding**.
+
 4. **Open** a Session Manager shell on the spoke A instance:
 
     ```bash

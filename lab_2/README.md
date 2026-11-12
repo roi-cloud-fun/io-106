@@ -184,6 +184,21 @@ Before you break it, see the role doing real work so the failure is unmistakable
 
 ## Task 3: Reproduce the Symptom
 
+> [!CAUTION]
+> **The error in this task is SUPPOSED to happen. You have not broken anything.**
+>
+> The second command below fails with a long red `UnauthorizedOperation` wall of
+> text ending in *"because no permissions boundary allows the
+> `ec2:CreateNetworkInsightsPath` action"*. **That is the symptom you came here to
+> reproduce** - it is the whole point of the lab, and it means the fault injected
+> in Task 2 is working.
+>
+> Do not re-run `terraform apply`, do not re-create the profile, and do not go
+> looking for a mistake. Read the error, then go diagnose *why* in Task 4.
+>
+> The only result that would mean something is wrong is the command **succeeding**
+> and returning a `nip-...` id - see the note below if that happens.
+
 4. **Run the same two calls as in Task 1**, under the same `netops` profile. Re-derive the ids first in case you reconnected:
 
     ```bash

@@ -112,6 +112,18 @@ In Terraform, the zone and its associations are deliberately **separate resource
 
 ## Task 3: Reproduce the Symptom from Spoke A
 
+> [!CAUTION]
+> **The failure in this task is SUPPOSED to happen. You have not broken anything.**
+>
+> `app.lab.internal` will **fail to resolve** from spoke A - no answer, or
+> `NXDOMAIN`. That is the symptom you came here to reproduce, and it means the
+> fault injected in Task 2 is working.
+>
+> Do not re-run `terraform apply` and do not go looking for a typo in the name.
+> Task 4 has you resolve the *same* name from spoke B, where it still works -
+> that contrast is what proves this is a DNS **scope** problem and not a broken
+> resolver, a routing fault, or a security group.
+
 5. **Start** a Session Manager shell on the spoke A instance (no SSH, no key pair - this is the only access path in a no-IGW/no-NAT design):
 
     ```bash
