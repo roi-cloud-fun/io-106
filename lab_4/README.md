@@ -193,7 +193,17 @@ VPC Flow Logs record an `ACCEPT` or `REJECT` verdict for traffic at each ENI. A 
 
 > **Expected Result:** One or more flow-log records where `srcaddr` is the spoke A IP, `dstaddr` is the spoke B IP, `protocol` is `1` (ICMP), and the action field is **`REJECT`**. A `REJECT` at spoke B's ENI for traffic that arrived there means the packet got across the Transit Gateway and into spoke B's VPC, then was dropped by spoke B's **security group**. That is **Fault 1**: spoke B's instance SG is missing an ingress rule for ICMP from spoke A.
 
-> **If you see no records yet:** VPC Flow Logs take up to ~10 minutes to deliver the first batch after an apply. Re-send a few pings from spoke A (Task 2) to generate fresh traffic, wait, and re-run. You can widen the pattern by dropping `dstaddr=$B_IP` to see all `REJECT`s in the group.
+> **If you see no records yet, that is normal - wait about a minute.** Flow Logs
+> do not stream in real time: they buffer traffic for an **aggregation interval**
+> and publish in batches. This stack sets that interval to **60 seconds** (the
+> AWS default is 600 - ten minutes - which would make this task unusable).
+> Measured on a clean deploy: a fresh `REJECT` became visible **65 seconds**
+> after the ping.
+>
+> So: send the pings, wait a minute, then re-run the query. If it is still empty,
+> re-send a few pings from spoke A (Task 2) to generate fresh traffic - a rejected
+> packet only appears if something actually tried to cross. You can also widen the
+> pattern by dropping `dstaddr=$B_IP` to see every `REJECT` in the group.
 
 7. **Note the asymmetry.** Flow Logs told you *a packet reached spoke B and was rejected by policy*. It did **not** tell you anything about the return path. A less disciplined engineer adds the SG rule, re-tests, finds it still broken, and is confused. You are going to check the return path *before* you touch anything.
 
