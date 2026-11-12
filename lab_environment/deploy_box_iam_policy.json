@@ -146,6 +146,10 @@
         "iam:UpdateRole",
         "iam:TagRole",
         "iam:UntagRole",
+        "iam:ListRoleTags",
+        "iam:TagInstanceProfile",
+        "iam:UntagInstanceProfile",
+        "iam:ListInstanceProfileTags",
         "iam:PutRolePolicy",
         "iam:DeleteRolePolicy",
         "iam:GetRolePolicy",
@@ -179,7 +183,8 @@
         "iam:DeletePolicyVersion",
         "iam:ListPolicyVersions",
         "iam:TagPolicy",
-        "iam:UntagPolicy"
+        "iam:UntagPolicy",
+        "iam:ListPolicyTags"
       ],
       "Resource": "arn:aws:iam::*:policy/io106-*"
     },
