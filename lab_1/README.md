@@ -146,9 +146,26 @@ A good engineer confirms the tool's verdict against the resource itself.
 
 9. **Inspect** spoke A's route table directly. In the console go to **VPC > Route tables**, select `io106-<id>-spoke_a-rt`, and open the **Routes** tab. Or from the CLI:
 
+> [!CAUTION]
+> **Replace `<id>` with your own student id (for example `user07`) before you run the command below.**
+> The account is shared by the whole class, so `io106-<id>-spoke_a-rt` matches **nothing** if you paste it unchanged - and the command does not error. It returns an empty result or `None`, which looks exactly like "my route table is missing" and will send you chasing a fault that is not there.
+
     ```bash
     aws ec2 describe-route-tables \
       --filters "Name=tag:Name,Values=io106-<id>-spoke_a-rt" \
+      --query 'RouteTables[0].Routes[].{Dest:DestinationCidrBlock,Target:TransitGatewayId}' \
+      --output table
+    ```
+    <!-- source: facts_extracted_v2.md §"Route Tables" -->
+
+    **Or avoid the substitution entirely** - read your id straight out of your own `terraform.tfvars`, so there is nothing to edit and nothing to get wrong:
+
+    ```bash
+    ID=$(awk -F'"' '/^[[:space:]]*student_id/{print $2}' terraform.tfvars)
+    echo "using student id: $ID"
+    aws ec2 describe-route-tables \
+      --region "$REGION" \
+      --filters "Name=tag:Name,Values=io106-$ID-spoke_a-rt" \
       --query 'RouteTables[0].Routes[].{Dest:DestinationCidrBlock,Target:TransitGatewayId}' \
       --output table
     ```
