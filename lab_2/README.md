@@ -81,11 +81,16 @@ Before you break it, see the role doing real work so the failure is unmistakable
 
     ```bash
     mkdir -p ~/.aws
-    grep -q '^\[profile netops\]' ~/.aws/config 2>/dev/null || printf '[profile netops]
-role_arn = %s
-credential_source = Ec2InstanceMetadata
-region = %s
-' "$NETOPS_ARN" "$REGION" >> ~/.aws/config
+    { echo "[profile netops]"; echo "role_arn = $NETOPS_ARN"; echo "credential_source = Ec2InstanceMetadata"; echo "region = $REGION"; } > ~/.aws/config
+    cat ~/.aws/config
+    ```
+    <!-- source: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html -->
+
+    That prints the file back so you can see the role ARN and region were substituted. Writing the file with `>` rather than appending means re-running it is safe - you cannot end up with the profile defined twice. (Your deploy box has no other AWS profiles, so there is nothing to overwrite.)
+
+    Now confirm which identity that profile gives you:
+
+    ```bash
     aws --profile netops sts get-caller-identity --query Arn --output text
     ```
     <!-- source: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html -->
@@ -188,11 +193,14 @@ CloudTrail records the failed call with the caller, the action, and the error - 
     **CLI path:** The raw events are huge JSON blobs, so do not dump them to the screen - write them to a file, then extract just the fields that matter:
 
     ```bash
-    aws cloudtrail lookup-events \
-      --lookup-attributes AttributeKey=EventName,AttributeValue=CreateNetworkInsightsPath \
-      --max-results 10 --output json > events.json
+    aws cloudtrail lookup-events --lookup-attributes AttributeKey=EventName,AttributeValue=CreateNetworkInsightsPath --max-results 10 --output json > events.json
+    echo "events written: $(wc -l < events.json) lines"
+    ```
+    <!-- source: https://docs.aws.amazon.com/cli/latest/reference/cloudtrail/ -->
 
-    # one readable line per matching event (jq is pre-installed on the deploy box):
+    Then pull out one readable line per event (`jq` is pre-installed on the deploy box):
+
+    ```bash
     jq -r '.Events[] | (.CloudTrailEvent|fromjson) | "\(.eventTime)  errorCode=\(.errorCode // "-")  caller=\(.userIdentity.arn // "-")"' events.json
     ```
     <!-- source: https://docs.aws.amazon.com/cli/latest/reference/cloudtrail/ -->
@@ -215,9 +223,13 @@ This is the core skill: when an action is denied but you believe it should be al
 7. **Show that the role's own policy grants the action.** Read its inline permissions policy and look for the Reachability Analyzer statement:
 
     ```bash
-    ROLE_NAME=$(basename "$(terraform output -raw network_operations_role_arn)")   # set in Task 1; re-derive here in case you reconnected
-    aws iam get-role-policy --role-name "$ROLE_NAME" --policy-name network-visibility \
-      --query 'PolicyDocument.Statement[?Sid==`ReachabilityAnalyzer`].Action'
+    ROLE_NAME=$(basename "$(terraform output -raw network_operations_role_arn)")
+    echo "role=$ROLE_NAME"
+    ```
+    <!-- source: course_outline_v3.md §"Lab 2" -->
+
+    ```bash
+    aws iam get-role-policy --role-name "$ROLE_NAME" --policy-name network-visibility --query 'PolicyDocument.Statement[?Sid==`ReachabilityAnalyzer`].Action'
     ```
     <!-- source: facts_extracted_v2.md §"Cross-Account IAM Roles" -->
 
@@ -233,11 +245,19 @@ This is the core skill: when an action is denied but you believe it should be al
 9. **Read the boundary's contents** - the document that defines the ceiling:
 
     ```bash
-    BARN=$(aws iam get-role --role-name "$ROLE_NAME" \
-      --query 'Role.PermissionsBoundary.PermissionsBoundaryArn' --output text)
+    BARN=$(aws iam get-role --role-name "$ROLE_NAME" --query 'Role.PermissionsBoundary.PermissionsBoundaryArn' --output text)
+    echo "boundary=$BARN"
+    ```
+    <!-- source: facts_extracted_v2.md §"Service Control Policies" -->
+
+    ```bash
     VID=$(aws iam get-policy --policy-arn "$BARN" --query 'Policy.DefaultVersionId' --output text)
-    aws iam get-policy-version --policy-arn "$BARN" --version-id "$VID" \
-      --query 'PolicyVersion.Document.Statement[].Action'
+    echo "version=$VID"
+    ```
+    <!-- source: facts_extracted_v2.md §"Service Control Policies" -->
+
+    ```bash
+    aws iam get-policy-version --policy-arn "$BARN" --version-id "$VID" --query 'PolicyVersion.Document.Statement[].Action'
     ```
     <!-- source: facts_extracted_v2.md §"Service Control Policies" -->
 
