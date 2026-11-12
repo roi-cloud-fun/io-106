@@ -4,7 +4,7 @@
 |---|---|
 | **Course** | IO-106 AWS Network Architecture and Cross-Account Access |
 | **Chapter** | Chapter 2 - Connectivity, Endpoints and DNS |
-| **Duration** | 40 minutes |
+| **Duration** | 40 minutes, plus an optional 10-minute bonus task (Task 8) |
 | **Difficulty** | Advanced |
 | **Prerequisites** | Lab 0 deployed and `./verify.sh` all-PASS on the healthy baseline. AWS CLI v2 authenticated to the training account, `session-manager-plugin`, `terraform` >= 1.10, and `jq` pre-installed on your deploy instance. |
 | **Builds On** | Lab 0 (your deployed `io106-<student_id>-` stack). This lab reuses the same stack and switches it into the `lab3` fault state. |
@@ -46,6 +46,8 @@ By the end of this lab, you will be able to:
 Before you break anything, anchor the healthy design. Three pieces in your stack carry this lab:
 
 1. **Interface VPC endpoints (PrivateLink).** Each spoke has the SSM trio (`ssm`, `ec2messages`, `ssmmessages`) as interface endpoints with private DNS enabled. That is why your instances are manageable over Session Manager with no NAT and no internet gateway. The Transit VPC additionally hosts a **shared STS interface endpoint** - the teachable stand-in for SYF's central endpoint account, where one account owns the endpoints and shares private access to the spokes.
+
+    Note one thing now, because it is the subject of the bonus task at the end of this lab: **"private DNS enabled" is scoped to the endpoint's own VPC.** Enabling it creates a hidden, AWS-managed private hosted zone containing a record for the service's public name that resolves to "the private IP addresses of the endpoint network interfaces **in your VPC**" ([AWS PrivateLink docs](https://docs.aws.amazon.com/vpc/latest/privatelink/privatelink-access-aws-services.html)). You cannot associate that hidden zone with another VPC. So the shared STS endpoint in the Transit VPC is *reachable* from the spokes over the Transit Gateway, but the name `sts.<region>.amazonaws.com` does **not** resolve to it from spoke A. DNS scope, again - the same lesson as the fault you are about to inject, one layer down.
 
 2. **Route 53 private hosted zone `lab.internal`.** It holds an `A` record, `app.lab.internal`, pointing at the spoke A instance's private IP. A private hosted zone only answers queries from VPCs it is **associated** to. Association is the gate.
 
@@ -373,6 +375,89 @@ Read it as: *"if `is_lab3` is true, then `0`, otherwise `1`."* And `local.is_lab
 
 ---
 
+## Task 8 (Bonus): Reach the Shared Endpoint Across the Transit Gateway
+
+> **Optional - approximately 10 minutes.** Everything in this task is **read-only**. There is no Terraform change and no fault to inject, so you can stop after Task 7 with a complete lab. Do this one if you want to see the central-endpoint pattern actually carry traffic, rather than only reading about it.
+
+So far the interface endpoints have been *infrastructure* - the reason Session Manager works at all. This task makes one of them the subject. You will use the **shared STS endpoint in the Transit VPC**, prove that spoke A cannot reach it by the service's normal name, then reach it across the Transit Gateway by its endpoint-specific name.
+
+This is the exact question to ask about any centralized endpoint: *routing* and *DNS* are two separate problems, and PrivateLink only solves the first one for you.
+
+19. **On the deploy box**, find your own shared endpoint and look at every DNS name it has. Scope the filter to your `student_id` - the `io106-*` tag prefix is shared with every other student in this account:
+
+    ```bash
+    MY_ID=$(grep -E '^[[:space:]]*student_id' terraform.tfvars | cut -d'"' -f2)
+    echo "my student_id = $MY_ID"
+    aws ec2 describe-vpc-endpoints --region "$REGION" --filters "Name=tag:Name,Values=io106-$MY_ID-transit-sts" --query 'VpcEndpoints[0].DnsEntries[].DnsName' --output table
+    ```
+    <!-- source: https://docs.aws.amazon.com/vpc/latest/privatelink/privatelink-access-aws-services.html -->
+
+> **Expected Result:** Four or five names. One **Regional** name like `vpce-0abc...-x1y2.sts.<region>.vpce.amazonaws.com`, one **zonal** name per AZ (same thing with `-<region><letter>` appended to the first label), and - last - the plain public name `sts.<region>.amazonaws.com`. That final entry is the record from the hidden, AWS-managed private hosted zone, and it is the one that only works inside the Transit VPC.
+
+20. **Capture** the Regional endpoint name and print a block to paste into the spoke. The `grep -v` drops the zonal names, keeping the Regional one:
+
+    ```bash
+    STS_DNS=$(aws ec2 describe-vpc-endpoints --region "$REGION" --filters "Name=tag:Name,Values=io106-$MY_ID-transit-sts" --query 'VpcEndpoints[0].DnsEntries[].DnsName' --output text | tr '\t' '\n' | grep '^vpce-' | grep -v -- "-${REGION}[a-z]\." | head -1)
+    echo "REGION=$REGION"
+    echo "STS_DNS=$STS_DNS"
+    ```
+    <!-- source: https://docs.aws.amazon.com/cli/latest/reference/ec2/describe-vpc-endpoints.html -->
+
+> **Expected Result:** Two `NAME=value` lines, the second ending in `.vpce.amazonaws.com`. If `STS_DNS` is empty, re-check that `MY_ID` printed your real student id in step 19.
+
+21. **Copy both lines** from step 20, then start a session on spoke A and paste them in. They do not carry across the session boundary - a new shell has none of your variables:
+
+    ```bash
+    aws ssm start-session --target "$A_ID" --region "$REGION"
+    ```
+    <!-- source: https://docs.aws.amazon.com/cli/latest/reference/ssm/ -->
+
+> [!CAUTION]
+> **The next command is supposed to fail.** You are about to call STS by its normal public name from a VPC that has no internet gateway and no NAT. It will hang for the full timeout and then error. That failure is the finding, not a mistake - do not try to fix it.
+
+22. **Inside the spoke A session**, paste your two `NAME=value` lines from step 20, then resolve and call the service **by its public name**:
+
+    ```bash
+    getent hosts sts.$REGION.amazonaws.com
+    aws sts get-caller-identity --region "$REGION" --cli-connect-timeout 5 --no-cli-pager
+    ```
+    <!-- source: https://docs.aws.amazon.com/vpc/latest/privatelink/privatelink-access-aws-services.html -->
+
+> **Expected Result:** `getent` returns a **public** address (something like `3.x.x.x` or `52.x.x.x`) - *not* a `10.106.x.x` address. The spoke's resolver has no knowledge of the Transit VPC's hidden endpoint zone, so it answers from public DNS. The `aws sts` call then fails with a connect timeout (`Could not connect to the endpoint URL` after a few retries), because spoke A has no route to a public address. **Routing to the endpoint is fine; DNS sent you somewhere else entirely.**
+
+23. **Still inside spoke A**, now use the endpoint-specific name instead, then leave the session:
+
+    ```bash
+    getent hosts "$STS_DNS"
+    aws sts get-caller-identity --endpoint-url "https://$STS_DNS" --region "$REGION" --no-cli-pager
+    exit
+    ```
+    <!-- source: https://docs.aws.amazon.com/vpc/latest/privatelink/privatelink-access-aws-services.html -->
+
+> **Expected Result:** `getent` returns a **`10.106.0.x`** address - an endpoint network interface in the *Transit* VPC, not in spoke A. The `aws sts` call then succeeds and prints JSON containing the spoke A instance role ARN. That call left spoke A, crossed the **Transit Gateway** into the Transit VPC, hit a centrally-owned interface endpoint, and came back - with no internet gateway and no NAT anywhere in the path. This is the central endpoint account pattern working end to end.
+>
+> Why this one resolved: the Regional and zonal `vpce.amazonaws.com` names are ordinary **public** DNS records ("the DNS records that we create for your interface VPC endpoint are public"), so spoke A's resolver can answer them - and the address they return is private and routable over the transit.
+
+> [!IMPORTANT]
+> **You are back on the DEPLOY BOX** after the `exit` above. Confirm with `hostname -I` if you are unsure: `10.106.250.x` = deploy box, `10.106.1.x` = still in spoke A.
+
+### What this means for designing shared endpoints
+
+Students usually ask the obvious follow-up: *could we put an S3 endpoint in the Transit VPC and reach it from the spokes the same way?* The answer depends entirely on which **type** of endpoint, and this is worth knowing before you design it:
+
+| | Gateway endpoint (S3, DynamoDB) | Interface endpoint (PrivateLink) |
+|---|---|---|
+| **Mechanism** | A prefix-list route in the route tables you select | Elastic network interfaces with private IPs in your subnets |
+| **Reachable from another VPC over Transit Gateway or peering** | **No** - "do not allow access from on premises"; "do not allow access from another AWS Region" | **Yes** - "allow access from a VPC in another AWS Region by using VPC peering or AWS Transit Gateway" |
+| **DNS** | Uses the same public S3 names | **Requires** endpoint-specific names, as you just saw |
+| **Cost** | Not billed | Billed per AZ-hour plus per GB |
+
+So a **gateway** endpoint can never be centralized - it only ever serves the VPC it is attached to, which is why a shared-endpoint design uses **interface** endpoints even for S3, and accepts the cost.
+
+And to make the plain name work from a spoke - so applications need no `--endpoint-url` change - you add exactly what you fixed in Task 6: **your own** Route 53 private hosted zone for `sts.<region>.amazonaws.com`, holding an alias to the endpoint, **associated with the spoke VPCs**. You cannot associate AWS's hidden zone, but nothing stops you from creating your own and scoping it yourself. The whole centralized-endpoint model is a routing decision plus a zone-association decision - and the zone association is the half that silently does nothing when you get it wrong.
+
+---
+
 ## Knowledge Checks
 
 **Question 1.** Spoke B resolves `app.lab.internal` but spoke A returns NXDOMAIN, even though both spokes share the same Transit Gateway and the record never changed. Why does association - not routing or the record itself - explain this difference?
@@ -396,6 +481,15 @@ Session Manager only works because the SSM interface endpoints resolve via priva
 `count = local.is_lab3 ? 0 : 1` evaluates to `0` when the scenario is `lab3` (because `local.is_lab3` is `true`), and a resource with `count = 0` is not created - so the spoke A association is absent in the `lab3` state and present otherwise. The association is a separate `aws_route53_zone_association` resource (rather than a `vpc {}` block inside `aws_route53_zone`) precisely so that one VPC's association can be added or removed without recreating or modifying the zone. This is the standard Terraform pattern for centrally owned private zones that many VPCs attach to over time - the kind of model SYF runs from its central endpoint account.
 </details>
 
+**Question 4 (bonus task).** A colleague proposes centralizing S3 access for all spokes by creating a single **gateway** endpoint in the Transit VPC and letting the spokes reach it over the Transit Gateway. Why will this not work, and what are the two changes that make a centralized endpoint usable from a spoke by its normal service name?
+
+<details><summary>Answer</summary>
+
+A gateway endpoint is implemented as a **route**: creating one adds an AWS-managed prefix-list entry to the route tables you select, inside that VPC. It only serves instances in subnets whose route tables carry that entry, so it cannot be consumed from another VPC at all - the docs state plainly that gateway endpoints "do not allow access from on premises" and "do not allow access from another AWS Region." There is nothing to route *to* from the spoke; the endpoint is not an address, it is a routing rule in someone else's route table. A centralized design must use an **interface** endpoint, which is real network interfaces with private IPs and is explicitly supported "from a VPC in another AWS Region by using VPC peering or AWS Transit Gateway."
+
+The two changes are (1) **routing** - the spoke needs a route to the endpoint's VPC CIDR via the Transit Gateway, and the endpoint's security group must permit 443 from the spoke CIDR; and (2) **DNS** - because the endpoint's own private DNS is an AWS-managed hidden zone scoped to the endpoint's VPC and cannot be associated elsewhere, you create your **own** Route 53 private hosted zone for the service name, with an alias to the endpoint, and associate it with the spoke VPCs. Without (1) it is unreachable; without (2) it is reachable but the name resolves to the public service address and traffic goes nowhere - which is precisely what you observed in step 22.
+</details>
+
 ---
 
 ## Lab Summary
@@ -413,5 +507,8 @@ The transferable lesson: with centralized VPC endpoints and Route 53 private zon
 - [Amazon Route 53 - Working with private hosted zones](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/hosted-zones-private.html)
 - [Amazon Route 53 - Associating a VPC with a private hosted zone](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/hosted-zone-private-associate-vpcs.html)
 - [Amazon VPC - Interface VPC endpoints (AWS PrivateLink)](https://docs.aws.amazon.com/vpc/latest/privatelink/create-interface-endpoint.html)
+- [AWS PrivateLink - Access AWS services (private DNS, DNS hostnames, DNS resolution)](https://docs.aws.amazon.com/vpc/latest/privatelink/privatelink-access-aws-services.html) - the Task 8 reference for why private DNS is VPC-scoped
+- [AWS PrivateLink - Gateway endpoints](https://docs.aws.amazon.com/vpc/latest/privatelink/gateway-endpoints.html) - gateway vs interface endpoint behaviour
+- [AWS PrivateLink for Amazon S3 - Types of VPC endpoints for Amazon S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/privatelink-interface-endpoints.html) - the gateway/interface comparison table quoted in Task 8
 - [AWS Systems Manager - Starting a session (Session Manager)](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-sessions-start.html)
 - [Terraform - The `count` meta-argument](https://developer.hashicorp.com/terraform/language/meta-arguments/count)
