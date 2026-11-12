@@ -194,12 +194,14 @@ Before you break it, see the role doing real work so the failure is unmistakable
     ```
     <!-- source: course_outline_v3.md §"Lab 2" -->
 
-    The read still works:
+    The read still works - the same question about your own two instances you asked in Task 1:
 
     ```bash
-    aws --profile netops ec2 describe-route-tables --query 'length(RouteTables)' --output text
+    aws --profile netops ec2 describe-instances --region "$REGION" --instance-ids "$A_ID" "$B_ID" --query 'Reservations[].Instances[].[InstanceId,PrivateIpAddress]' --output table
     ```
     <!-- source: facts_extracted_v2.md §"Cross-Account IAM Roles" -->
+
+    You get the same two instances and IPs back as before. That is the point: the role is **not** broken, and the fault is not "I lost access". Only one specific action has been taken away.
 
     Reachability Analyzer is now refused:
 
