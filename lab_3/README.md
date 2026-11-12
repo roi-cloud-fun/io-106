@@ -266,6 +266,28 @@ You can confirm the missing association from the console or the CLI. Use whichev
 
 You have two ways to restore the association. The **pedagogical fix** edits the source of truth so the repair is permanent and reviewable - that is how SYF operates. (A fast reset alternative is noted at the end.)
 
+**What `count` actually does, and why deleting it is the fix**
+
+In Terraform, `count` says **how many copies of this resource should exist**. It is not a flag or a condition on the resource's behaviour - it decides whether the resource exists at all:
+
+| `count` value | What Terraform does |
+|---|---|
+| `1` | Create exactly one of this resource |
+| `0` | Create **none** - and if one already exists, **destroy it** |
+
+The line in your file is a conditional that evaluates to one of those two numbers:
+
+```hcl
+count = local.is_lab3 ? 0 : 1
+```
+<!-- source: facts_extracted_v2.md §"Interface Endpoints (PrivateLink)" -->
+
+Read it as: *"if `is_lab3` is true, then `0`, otherwise `1`."* And `local.is_lab3` is simply `var.scenario == "lab3"`. So when you ran `terraform apply -var scenario=lab3` in Task 2, that line evaluated to `0`, Terraform concluded this resource should not exist, and **destroyed the association** - which is exactly the `1 to destroy` you read in the plan. The zone, the record, the routing and the security groups were never touched; only this one association was counted down to zero.
+
+**Deleting the line removes the conditional entirely.** A resource with no `count` is simply always created, once. The association can then never be counted down to zero again, no matter what `scenario` is set to - which is why the next step applies with no `-var` flag at all and the fix still holds. That is what makes it a *repair* rather than a reset: you have changed what the code says should exist, not just which switch is flipped.
+
+<!-- source: facts_extracted_v2.md §"Interface Endpoints (PrivateLink)" -->
+
 14. **Open** `endpoints.tf` in your editor and find the `aws_route53_zone_association.spoke_a` resource. **Delete** the `count` line so the association is created unconditionally, like its spoke B sibling:
 
     ```hcl
