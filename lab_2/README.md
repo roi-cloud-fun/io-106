@@ -368,13 +368,50 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
 
 ## Task 7: Re-Verify
 
-13. **Re-run Reachability Analyzer under the role** - it should work again:
+13. **Re-run Reachability Analyzer under the role** - it should work again. Creating the path is the call that was denied, so this alone proves the fix:
 
     ```bash
     A_ID=$(terraform output -raw spoke_a_instance_id)
     B_ID=$(terraform output -raw spoke_b_instance_id)
-    aws --profile netops ec2 create-network-insights-path --source "$A_ID" --destination "$B_ID" --protocol tcp --query 'NetworkInsightsPath.NetworkInsightsPathId' --output text
+    PATH_ID=$(aws --profile netops ec2 create-network-insights-path --source "$A_ID" --destination "$B_ID" --protocol tcp --query 'NetworkInsightsPath.NetworkInsightsPathId' --output text)
+    echo "PATH_ID=$PATH_ID"
     ```
+    <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
+
+    **Now actually analyse it.** A path on its own is only a *definition* - it has
+    run nothing. Start the analysis and read the result:
+
+    ```bash
+    ANALYSIS_ID=$(aws --profile netops ec2 start-network-insights-analysis --network-insights-path-id "$PATH_ID" --query 'NetworkInsightsAnalysis.NetworkInsightsAnalysisId' --output text)
+    echo "ANALYSIS_ID=$ANALYSIS_ID"
+    ```
+    <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
+
+    ```bash
+    sleep 20
+    aws --profile netops ec2 describe-network-insights-analyses --network-insights-analysis-ids "$ANALYSIS_ID" --query 'NetworkInsightsAnalyses[0].[Status,NetworkPathFound,Explanations[0].ExplanationCode]' --output text
+    ```
+    <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
+
+> [!IMPORTANT]
+> **Always start an analysis after creating a path - or the console shows a
+> spinner forever.** `create-network-insights-path` only defines the path;
+> `start-network-insights-analysis` is a separate call that actually runs it.
+>
+> In **Network Manager > Reachability Analyzer > Paths**, a path that has never
+> been analysed shows a **spinning** icon under both *Reachability status* and
+> *Last analysis status*, and it never resolves. That looks exactly like a job
+> stuck running for hours. It is not: nothing is queued, nothing is consuming
+> anything, and no amount of waiting will change it.
+>
+> (The console's **Create and analyze path** button does both steps for you,
+> which is why this only bites on the CLI route.)
+>
+> Expect `succeeded  False  ENI_SG_RULES_MISMATCH` on this A-to-B path - the
+> analysis **ran**, which is the thing Task 7 is proving. It reports "not
+> reachable" because this lab's spoke security groups only permit ICMP and
+> Reachability Analyzer can only test TCP or UDP. That is by design, not a
+> leftover fault.
     <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
 
 **Expected Result:** `create-network-insights-path` now returns a `nip-...` id instead of `UnauthorizedOperation`. The cap is gone; the role's policy is back in full effect.
