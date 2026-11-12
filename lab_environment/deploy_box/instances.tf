@@ -81,7 +81,16 @@ resource "aws_instance" "deploy" {
     encrypted   = true
   }
 
-  user_data_replace_on_change = true
+  # DELIBERATELY false. user_data only ever runs at first boot, so flipping this
+  # to true would mean any later edit to the bootstrap script REPLACES running
+  # boxes -- and each box holds the only copy of that student's
+  # lab_env_student terraform.tfstate on its root volume. Replacing a box
+  # mid-course would orphan ~77 AWS resources the student can no longer manage.
+  #
+  # With this false: existing boxes are left alone and newly added student_ids
+  # get the current script. Rebuild a specific box on purpose with
+  # `terraform taint` / `-replace` instead.
+  user_data_replace_on_change = false
 
   user_data = <<-EOT
     #!/bin/bash
@@ -109,9 +118,29 @@ resource "aws_instance" "deploy" {
     git checkout ${var.repo_branch}
 
     # Land the student in the module directory on login.
+    #
+    # .bashrc only covers ec2-user. Session Manager connects as ssm-user by
+    # default and starts in /usr/bin, where .bashrc never runs and
+    # /home/ec2-user (mode 0700) is unreadable -- so a student would land
+    # somewhere they cannot work. The real fix is the account-level
+    # SSM-SessionManagerRunShell document (runAsDefaultUser = ec2-user); this
+    # profile.d file is the belt-and-braces so ANY login shell at least gets
+    # the region and a pointer to the module.
     echo 'cd ~/io-106/lab_environment/lab_env_student' >> /home/ec2-user/.bashrc
     echo 'export AWS_DEFAULT_REGION=${var.region}' >> /home/ec2-user/.bashrc
     echo "${each.value}" > /home/ec2-user/.io106-student-id
+
+    cat > /etc/profile.d/io106.sh <<'PROFILE'
+    export AWS_DEFAULT_REGION=${var.region}
+    if [ -d "$HOME/io-106/lab_environment/lab_env_student" ]; then
+      cd "$HOME/io-106/lab_environment/lab_env_student"
+    elif [ "$(id -un)" != "ec2-user" ]; then
+      echo "IO-106: you are $(id -un), but the lab files live in ec2-user's home."
+      echo "        Run:  sudo su - ec2-user"
+    fi
+    PROFILE
+    sed -i 's/^    //' /etc/profile.d/io106.sh
+    chmod 0644 /etc/profile.d/io106.sh
 
     chown -R ec2-user:ec2-user /home/ec2-user
 

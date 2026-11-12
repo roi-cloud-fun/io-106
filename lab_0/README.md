@@ -62,6 +62,27 @@ By the end of this lab, you will:
 
 1. **Connect to your deploy instance** with SSM Session Manager - there is nothing to install on your own laptop. From the Console, open **Systems Manager**, then **Session Manager**, and **Start session** against `io106-<your_id>-deploy`. Or from any host with the AWS CLI: `aws ssm start-session --target <your-deploy-instance-id>`. Access is SSM-only - no SSH, no key pair, no public IP.
 
+    **Check who you are and where you landed** before anything else - the rest of this lab depends on it:
+
+    ```bash
+    whoami      # expect: ec2-user
+    pwd         # expect: /home/ec2-user/io-106/lab_environment/lab_env_student
+    ```
+
+    > **If `whoami` says `ssm-user` and `pwd` says `/usr/bin`,** Session Manager
+    > dropped you into its default identity instead of `ec2-user`. You cannot work
+    > from there - `/usr/bin` is not writable and the lab files live in
+    > `ec2-user`'s home, which `ssm-user` cannot read. Switch user and carry on:
+    >
+    > ```bash
+    > sudo su - ec2-user
+    > cd ~/io-106/lab_environment/lab_env_student
+    > ```
+    >
+    > Everything after this point assumes you are `ec2-user`. Mention it to your
+    > instructor - the fix is a one-time Session Manager preference on the
+    > account, not something you should have to do every session.
+
 2. **Confirm** the three required tools are present:
 
     ```bash
@@ -82,11 +103,31 @@ By the end of this lab, you will:
     ```
     <!-- source: https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html -->
 
-3. **Change directory** into the student lab module. The `io-106` repo is already cloned on the box:
+3. **Change directory** into the student lab module. The `io-106` repo is already cloned on the box, so this should just work:
 
     ```bash
     cd ~/io-106/lab_environment/lab_env_student
+    ls      # expect network.tf, iam.tf, endpoints.tf, variables.tf, verify.sh ...
     ```
+    <!-- source: course_outline_v3.md §"Lab 0" -->
+
+    > **If `~/io-106` does not exist** (the box's first-boot setup failed, or you
+    > are on a box someone built by hand), clone just the lab directories
+    > yourself - you are `ec2-user`, `git` is already installed, and the repo is
+    > public, so no credentials are needed:
+    >
+    > ```bash
+    > cd ~
+    > git clone --no-checkout --branch trunk https://github.com/roi-cloud-fun/io-106.git io-106
+    > cd io-106
+    > git sparse-checkout init --cone
+    > git sparse-checkout set lab_environment lab_0 lab_1 lab_2 lab_3 lab_4
+    > git checkout trunk
+    > cd ~/io-106/lab_environment/lab_env_student
+    > ```
+    >
+    > Note the branch is **`trunk`**, not `main` - a plain `git clone` of this
+    > repo checks out `trunk` anyway, but be explicit if you are scripting it.
 
 > **Note:** Run Terraform from the deploy instance's local checkout (`~/io-106`), where your `.tfstate` stays consistent. Do not copy the module onto a synced drive.
 
@@ -123,16 +164,33 @@ Terraform works in three moves: `init` downloads the providers, `plan` shows wha
 
 Every named resource is prefixed `io106-<student_id>-` so all eight students share one account without collisions. Your instructor assigns your ID (for example `s01`).
 
-7. **Copy** the example tfvars file and set your ID:
+7. **Copy** the example tfvars file, then set **both** your ID and your region:
 
     ```bash
     cp terraform.tfvars.example terraform.tfvars
-    # edit terraform.tfvars: set student_id = "s01"  (use YOUR assigned id)
+    # edit terraform.tfvars:
+    #   student_id = "s01"        (use YOUR assigned id)
+    #   region     = "us-east-2"  (use the region your instructor gave you)
     ```
 
     `student_id` must be lowercase alphanumeric, 2-12 characters. Leave `scenario = "healthy"` for Lab 0.
 
-**Expected Result:** `terraform.tfvars` contains your assigned `student_id` and `scenario = "healthy"`.
+    > **Set `region` deliberately — do not leave the default.** The example file
+    > ships with `region = "us-east-1"`, which is probably **not** your class
+    > region. It must match the region your deploy box is in, which is already
+    > exported on the box as `AWS_DEFAULT_REGION`:
+    >
+    > ```bash
+    > echo $AWS_DEFAULT_REGION     # put THIS value in terraform.tfvars
+    > ```
+    >
+    > Get this wrong and the stack still builds, but in a different region from
+    > your shell — then later lab commands that do not pass `--region` look in
+    > the wrong place and report your instances as missing. That failure is
+    > confusing and entirely avoidable here.
+
+**Expected Result:** `terraform.tfvars` contains your assigned `student_id`, the
+region matching `$AWS_DEFAULT_REGION`, and `scenario = "healthy"`.
 
 ---
 
