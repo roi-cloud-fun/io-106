@@ -100,6 +100,12 @@ In Terraform, the zone and its associations are deliberately **separate resource
 
 > **Expected Result:** Apply completes with `Destroy complete! Resources: 1 destroyed.` The `next_step` output reminds you a fault is active. Only spoke A's zone association is gone - the zone, the record, routing, and security groups are untouched.
 
+> **This one apply is slow - that is normal.** Route 53 zone-association changes
+> take a while: removing the association was measured at **1m46s** on this stack,
+> and Terraform prints `Still destroying...` every 10 seconds while it waits. One
+> resource taking almost two minutes looks like a hang when every other
+> single-resource change in this course finishes in seconds. Let it run.
+
 > **Teaching note:** This is the IaC version of an operational change. In production, a Terraform plan that says "1 to destroy" on a zone association is the kind of diff a reviewer should catch *before* apply. Reading the plan is a network-engineering control, not a formality.
 
 ---
@@ -226,7 +232,9 @@ You have two ways to restore the association. The **pedagogical fix** edits the 
 
 16. **Type** `yes` to apply.
 
-> **Expected Result:** `Apply complete! Resources: 1 added.` Note that removing `count` changes the resource address from `aws_route53_zone_association.spoke_a[0]` back to `aws_route53_zone_association.spoke_a` - Terraform handles this transparently.
+> **Expected Result:** `Apply complete! Resources: 1 added.` Note that removing `count` changes the resource address from `aws_route53_zone_association.spoke_a[0]` back to `aws_route53_zone_association.spoke_a` - Terraform handles this transparently. Expect this apply to take **over a minute** (measured at 84s) - re-associating a Route 53 private zone is simply slow, the same as the removal in Task 2.
+
+> **Unlike the IAM boundary in Lab 2, DNS resolution comes back immediately** once the association exists - there is no extra propagation wait. Measured here: the first `getent` after the apply already resolved. If the name still fails, the association genuinely is not there - re-check the plan output rather than waiting.
 
 ---
 
