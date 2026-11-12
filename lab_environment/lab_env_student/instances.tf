@@ -56,7 +56,16 @@ resource "aws_instance" "spoke_a" {
     http_endpoint = "enabled"
   }
 
-  tags = { Name = "${local.name_prefix}-spoke-a" }
+
+  # The SSM agent must find its interface endpoints ALREADY AVAILABLE on first
+  # boot. Without this ordering Terraform creates the instance and the endpoints
+  # in parallel: the agent starts, cannot reach ssmmessages, and enters a long
+  # retry backoff. Measured 2026-11-12 on a clean user49 deploy -- spoke_b
+  # registered normally while spoke_a was still PingStatus=None SIX MINUTES
+  # after launch, which fails 3 verify.sh checks on a healthy baseline and
+  # blocks every lab that needs a session into spoke A (1, 3 and 4).
+  depends_on = [aws_vpc_endpoint.spoke_a_ssm]
+  tags       = { Name = "${local.name_prefix}-spoke-a" }
 }
 
 # --- Spoke B instance --------------------------------------------------------
@@ -74,5 +83,14 @@ resource "aws_instance" "spoke_b" {
     http_endpoint = "enabled"
   }
 
-  tags = { Name = "${local.name_prefix}-spoke-b" }
+
+  # The SSM agent must find its interface endpoints ALREADY AVAILABLE on first
+  # boot. Without this ordering Terraform creates the instance and the endpoints
+  # in parallel: the agent starts, cannot reach ssmmessages, and enters a long
+  # retry backoff. Measured 2026-11-12 on a clean user49 deploy -- spoke_b
+  # registered normally while spoke_a was still PingStatus=None SIX MINUTES
+  # after launch, which fails 3 verify.sh checks on a healthy baseline and
+  # blocks every lab that needs a session into spoke A (1, 3 and 4).
+  depends_on = [aws_vpc_endpoint.spoke_b_ssm]
+  tags       = { Name = "${local.name_prefix}-spoke-b" }
 }
