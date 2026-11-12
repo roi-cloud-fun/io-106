@@ -113,7 +113,7 @@ By the end of this lab, you will:
 
     ```bash
     # inside the spoke A session
-    ping -c 4 -W 2 <SPOKE_B_IP>
+    ping -c 4 -W 2 <SPOKE_B_IP>    # -c 4 = 4 packets then stop; -W 2 = give up after 2s per packet
     exit
     ```
     <!-- source: course_outline_v3.md §"Lab 1" -->

@@ -319,11 +319,19 @@ You will live inside these instances during the troubleshooting labs, so connect
 
     ```bash
     # inside the spoke A session
-    ping -c 3 <SPOKE_B_IP>         # the address from step 15, typed in full
+    ping -c 3 <SPOKE_B_IP>         # -c 3 = send 3 packets, then stop
     getent hosts app.lab.internal  # should resolve to a 10.106.x.x address
     exit
     ```
     <!-- source: facts_extracted_v2.md §"Transit Gateway" -->
+
+> **About those `ping` flags.** `-c 3` means *send 3 packets and exit*. Without
+> it, Linux `ping` runs forever and you would have to interrupt it with `Ctrl-C`.
+> From Lab 1 onwards you will also see `-W 2`, which sets the per-packet reply
+> timeout to 2 seconds - that matters when the path is **broken**, because it
+> makes `ping` give up quickly and return a clean "100% packet loss" instead of
+> sitting there looking like it has frozen. (`-W` is the reply timeout per
+> packet; do not confuse it with lowercase `-w`, which caps the total run time.)
 
 **Expected Result:** The ping to spoke B succeeds (replies, 0% loss) and `app.lab.internal` resolves to a `10.106.x.x` address. This is the healthy behavior; remember it, because in Lab 1 the ping will hang and in Lab 3 the name will fail to resolve.
 

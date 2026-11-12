@@ -127,11 +127,12 @@ Fix only one and the path stays down. That is the whole point.
     ```bash
     aws ssm start-session --target "$A_ID" --region "$REGION"
     ```
+<!-- source: https://docs.aws.amazon.com/cli/latest/reference/ssm/ -->
 
     Then, **inside the session**, ping spoke B and exit (paste these separately - the session is a new shell; use the spoke B IP printed in Task 1):
 
     ```bash
-    ping -c 3 -W 2 <B_IP>
+    ping -c 3 -W 2 <B_IP>    # -c 3 = 3 packets then stop; -W 2 = give up after 2s per packet
     exit
     ```
 <!-- source: course_outline_v3.md §"Lab 4" -->
@@ -211,6 +212,7 @@ Reachability Analyzer is static analysis of the network configuration - it prove
       --query 'NetworkInsightsPath.NetworkInsightsPathId' --output text)
     echo "PATH_ID=$PATH_ID"          # expect nip-...  (empty = create failed; read the error above)
     ```
+<!-- source: https://docs.aws.amazon.com/cli/latest/reference/ec2/ -->
 
     Start the analysis (needs a valid `PATH_ID`):
 
@@ -221,6 +223,7 @@ Reachability Analyzer is static analysis of the network configuration - it prove
       --query 'NetworkInsightsAnalysis.NetworkInsightsAnalysisId' --output text)
     echo "ANALYSIS_ID=$ANALYSIS_ID"  # expect nia-...  (empty = start failed, usually an empty PATH_ID)
     ```
+<!-- source: https://docs.aws.amazon.com/cli/latest/reference/ec2/ -->
 
     Wait a few seconds for it to finish, then read the result:
 
@@ -232,6 +235,7 @@ Reachability Analyzer is static analysis of the network configuration - it prove
       --query 'NetworkInsightsAnalyses[0].{Status:Status,Reachable:NetworkPathFound,Explanation:Explanations[0].ExplanationCode}' \
       --output table
     ```
+<!-- source: https://docs.aws.amazon.com/cli/latest/reference/ec2/ -->
 
     (If `Status` shows `running`, wait a few more seconds and re-run the last command.)
 <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
@@ -273,7 +277,7 @@ Diagnosis is done from read-only. The fix happens with your own identity, in cod
 
     The `Arn` must **not** contain `network-operations`. If you skip this `unset`, Terraform runs as the read-only role and `plan`/`apply` fail with a wall of `AccessDenied` errors naming `assumed-role/io106-<id>-network-operations` - for example *not authorized to perform `iam:ListRolePolicies` / `ssm:GetParameter` / `logs:ListTagsForResource`*. That is the role being read-only **by design** - it cannot even refresh all of the state, let alone change it. If you see those errors, you forgot to unset: run the two commands above and retry.
 
-12. **Fix Fault 1.** Open `security_groups.tf`, find `aws_vpc_security_group_ingress_rule.spoke_b_icmp_from_a`, and **delete** its `count` line so the ingress rule is always created:
+12. **Fix Fault 1.** Open `security_groups.tf`, find `aws_vpc_security_group_ingress_rule.spoke_b_icmp_from_a`, and **delete** its `count` line so the ingress rule is always created. Delete only that one line - leave every other attribute in the block exactly as it is (the snippet below is abridged):
 
     ```hcl
     resource "aws_vpc_security_group_ingress_rule" "spoke_b_icmp_from_a" {
@@ -285,7 +289,7 @@ Diagnosis is done from read-only. The fix happens with your own identity, in cod
     }
     ```
 
-13. **Fix Fault 2.** Open `network.tf`, find `aws_route.spoke_b_to_spoke_a`, and **delete** its `count` line so the return route is always created:
+13. **Fix Fault 2.** Open `network.tf`, find `aws_route.spoke_b_to_spoke_a`, and **delete** its `count` line so the return route is always created. Again, delete only that line - in particular **keep the `depends_on = [aws_ec2_transit_gateway_vpc_attachment.this]`** at the bottom of the block, which stops Terraform creating the route before the TGW attachment exists (the snippet below is abridged):
 
     ```hcl
     resource "aws_route" "spoke_b_to_spoke_a" {
@@ -318,6 +322,7 @@ Diagnosis is done from read-only. The fix happens with your own identity, in cod
     ```bash
     aws ssm start-session --target "$A_ID" --region "$REGION"
     ```
+<!-- source: https://docs.aws.amazon.com/cli/latest/reference/ssm/ -->
 
     Then, **inside the session**, ping spoke B and exit (paste separately - the session is a new shell):
 
