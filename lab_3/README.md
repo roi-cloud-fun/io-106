@@ -157,12 +157,26 @@ In Terraform, the zone and its associations are deliberately **separate resource
 
 ## Task 4: Prove It Is Scope, Not the Resolver - Test Spoke B
 
-9. **Start** a session on the spoke B instance and resolve the same name:
+9. **Back on the deploy box**, start a session on the spoke B instance and resolve the same name. If you skipped the `exit` in step 8 you are still inside **spoke A** - confirm before you run this:
+
+    ```bash
+    hostname -I
+    ```
+    <!-- source: course_outline_v3.md §"Lab 3" -->
+
+    A `10.106.250.x` address means you are on the deploy box and can continue. A `10.106.1.x` address means you are still inside spoke A - type `exit` first.
 
     ```bash
     aws ssm start-session --target "$B_ID" --region "$REGION"
     ```
     <!-- source: facts_extracted_v2.md §"Interface Endpoints (PrivateLink)" -->
+
+    > **Why this matters.** Session Manager sessions do not nest. Run the command
+    > above from *inside* spoke A and it does not refuse - it **hangs and then
+    > times out**, because that instance has no route to the SSM API (its
+    > endpoints serve its own agent only) and its role carries just
+    > `AmazonSSMManagedInstanceCore`. A timeout here means wrong shell, not a
+    > broken instance.
 
     Inside the session:
 
