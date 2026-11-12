@@ -238,9 +238,28 @@ Reachability Analyzer is static analysis of the network configuration - it prove
     <!-- source: https://docs.aws.amazon.com/cli/latest/reference/ec2/ -->
 
     (If `Status` shows `running`, wait a few more seconds and re-run the last command.)
+
     <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
 
 > **Expected Result:** `Status` is `succeeded`, `Reachable` (NetworkPathFound) is `false`, and the explanation code names a missing route (for example `NO_ROUTE_TO_DESTINATION` / no route to destination in the source route table). That is **Fault 2**: spoke B's VPC route table has no route back to spoke A's CIDR (`10.106.1.0/24`) via the Transit Gateway. The return traffic has nowhere to go.
+
+> [!IMPORTANT]
+> **If `Status` comes back `failed` with no explanation code**, add `StatusMessage` to the query and read it:
+>
+> ```bash
+> aws ec2 describe-network-insights-analyses --region "$REGION" --network-insights-analysis-ids "$ANALYSIS_ID" --query 'NetworkInsightsAnalyses[0].[Status,StatusMessage]' --output text
+> ```
+>
+> `"The request failed due to insufficient permissions."` means the analysis
+> engine - not your `start-network-insights-analysis` call - was denied. Note the
+> asymmetry that makes this confusing: creating the path and starting the
+> analysis both **succeed**, then the analysis fails afterwards, so nothing in
+> your terminal looks like a permissions error until you read `StatusMessage`.
+>
+> Measured on this stack: the netops role needs AWS's
+> `AmazonVPCReachabilityAnalyzerFullAccessPolicy` for the engine to run, and for
+> about **15 seconds** after that policy is attached the analysis still fails.
+> Re-run it once before raising it with your instructor.
 
 9. **(Optional) Confirm directly** that the route is missing by inspecting spoke B's route table - the role can describe it:
 
