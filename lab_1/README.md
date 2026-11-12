@@ -144,14 +144,6 @@ Reachability Analyzer evaluates the *configured* path - routes, security groups,
 
 A good engineer confirms the tool's verdict against the resource itself.
 
-9. **Inspect** spoke A's route table directly - **back on the deploy box.** If you are still inside the spoke A session from Task 3, `exit` first:
-
-    ```bash
-    exit            # ONLY if you are still in the spoke A session
-    whoami && pwd   # expect ec2-user and .../lab_env_student
-    ```
-    <!-- source: course_outline_v3.md §"Lab 1" -->
-
 > [!CAUTION]
 > **This command must run on the deploy box, not inside a spoke instance.**
 > Run it inside a spoke and it **hangs and then times out** - it does not say
@@ -161,6 +153,14 @@ A good engineer confirms the tool's verdict against the resource itself.
 > anyway. A timeout here means you are in the wrong shell. (That is the
 > PrivateLink design working: the instance can be *managed* over SSM without
 > being able to reach the control plane itself.)
+
+9. **Inspect** spoke A's route table directly - **back on the deploy box.** If you are still inside the spoke A session from Task 3, `exit` first:
+
+    ```bash
+    exit            # ONLY if you are still in the spoke A session
+    whoami && pwd   # expect ec2-user and .../lab_env_student
+    ```
+    <!-- source: course_outline_v3.md §"Lab 1" -->
 
     Derive everything from your own state, so there is no student id to substitute and no region to guess - both of which silently return **empty output** rather than an error:
 
