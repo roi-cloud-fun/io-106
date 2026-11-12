@@ -135,6 +135,28 @@ resource "aws_iam_role_policy" "network_operations" {
   policy = data.aws_iam_policy_document.netops_permissions.json
 }
 
+# Reachability Analyzer needs more than ec2:Describe* + tiros:CreateQuery.
+#
+# Measured 2026-11-12: with only the inline policy above, `create-network-insights-path`
+# and `start-network-insights-analysis` both SUCCEED, but the analysis then ends
+# as status=failed / "The request failed due to insufficient permissions." --
+# because the engine enumerates other path-component types while evaluating, and
+# the inline policy grants none of them.
+#
+# AWS's own managed policy is the authoritative list, so attach that rather than
+# hand-maintaining it. Beyond what we already grant it adds tiros:ExtendQuery,
+# tiros:GetQueryExtensionAccounts, and read-only describes for
+# elasticloadbalancing, network-firewall, directconnect and globalaccelerator.
+#
+# It stays consistent with "read-only network visibility": it adds no network
+# mutation, only RA path create/delete plus describes. And it does NOT weaken
+# Lab 2 -- a permissions boundary caps the role as a whole, so the lab2 boundary
+# still denies the NetworkInsights actions regardless of this attachment.
+resource "aws_iam_role_policy_attachment" "network_operations_reachability" {
+  role       = aws_iam_role.network_operations.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonVPCReachabilityAnalyzerFullAccessPolicy"
+}
+
 # --- app role (least-privilege contrast) -------------------------------------
 # A second, narrower role to contrast with network-operations: it can only
 # describe its own instances. Trust is always healthy (this account).
