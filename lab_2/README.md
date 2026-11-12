@@ -159,6 +159,21 @@ Before you break it, see the role doing real work so the failure is unmistakable
 
     Read the plan. It creates `aws_iam_policy.netops_boundary` (if not already present) and updates `aws_iam_role.network_operations` to set its `permissions_boundary`. The role's `network-visibility` policy is unchanged. Type `yes`.
 
+> [!IMPORTANT]
+> **Give IAM about 15 seconds before you test.** Attaching or detaching a
+> permissions boundary is **eventually consistent** - `terraform apply` returns
+> as soon as IAM accepts the change, but the authorization decision can take
+> another 10-15 seconds to take effect everywhere.
+>
+> Measured on this exact stack: a Reachability Analyzer call made **1 second
+> after** the apply still used the *old* decision, and the new one took effect by
+> **13 seconds**.
+>
+> So if the next task's call succeeds when you expected it to be denied (or stays
+> denied after you have fixed it), you have almost certainly tested too fast.
+> Wait ~15 seconds and run it again before you start diagnosing. This is a real
+> property of IAM worth knowing, not a lab quirk.
+
 **Expected Result:** Apply completes. The only meaningful change is that the network-operations role now has a permissions boundary attached. Its permissions policy - and every network resource - is untouched.
 
 ---
@@ -191,7 +206,9 @@ Before you break it, see the role doing real work so the failure is unmistakable
 
     Note what did **not** happen: the role assumption itself still succeeded. The profile resolved, the identity is still the `network-operations` role, and a read-only call still returns data. Only this one action is blocked - which is exactly why the failure is confusing in the field and why the next task goes looking for a guardrail rather than a broken role.
 
-**Expected Result:** The assume-role *still succeeds* and the `describe` *still works* - but `create-network-insights-path` now fails with:
+**If the call SUCCEEDED and returned a `nip-...` id**, the boundary had not finished propagating when you ran it. Wait ~15 seconds and run it again - see the note at the end of Task 2. Do not start diagnosing until you have actually reproduced the denial.
+
+**Expected Result:** The read *still works* - but `create-network-insights-path` now fails with:
 
 ```
 An error occurred (UnauthorizedOperation) when calling the CreateNetworkInsightsPath
@@ -340,6 +357,8 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
     <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
 
 **Expected Result:** `create-network-insights-path` now returns a `nip-...` id instead of `UnauthorizedOperation`. The cap is gone; the role's policy is back in full effect.
+
+**If it is still denied,** you are testing faster than IAM propagates - this was measured at 13 seconds on this stack. Wait ~15 seconds and run the command again before concluding the fix did not work. Your `get-role` check above is the authoritative answer: if it printed `null`, the boundary really is detached.
 
 ---
 
