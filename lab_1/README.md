@@ -144,32 +144,42 @@ Reachability Analyzer evaluates the *configured* path - routes, security groups,
 
 A good engineer confirms the tool's verdict against the resource itself.
 
-9. **Inspect** spoke A's route table directly. In the console go to **VPC > Route tables**, select `io106-<id>-spoke_a-rt`, and open the **Routes** tab. Or from the CLI:
+9. **Inspect** spoke A's route table directly - **back on the deploy box.** If you are still inside the spoke A session from Task 3, `exit` first:
+
+    ```bash
+    exit            # ONLY if you are still in the spoke A session
+    whoami && pwd   # expect ec2-user and .../lab_env_student
+    ```
+    <!-- source: course_outline_v3.md §"Lab 1" -->
 
 > [!CAUTION]
-> **Replace `<id>` with your own student id (for example `user07`) before you run the command below.**
-> The account is shared by the whole class, so `io106-<id>-spoke_a-rt` matches **nothing** if you paste it unchanged - and the command does not error. It returns an empty result or `None`, which looks exactly like "my route table is missing" and will send you chasing a fault that is not there.
+> **This command must run on the deploy box, not inside a spoke instance.**
+> Run it inside a spoke and it **hangs and then times out** - it does not say
+> "denied". The spoke VPCs are fully private and have only the `ssm`,
+> `ec2messages` and `ssmmessages` endpoints, so there is no route to the EC2 API
+> at all, and the spoke instance role carries only `AmazonSSMManagedInstanceCore`
+> anyway. A timeout here means you are in the wrong shell. (That is the
+> PrivateLink design working: the instance can be *managed* over SSM without
+> being able to reach the control plane itself.)
+
+    Derive everything from your own state, so there is no student id to substitute and no region to guess - both of which silently return **empty output** rather than an error:
 
     ```bash
-    aws ec2 describe-route-tables \
-      --filters "Name=tag:Name,Values=io106-<id>-spoke_a-rt" \
-      --query 'RouteTables[0].Routes[].{Dest:DestinationCidrBlock,Target:TransitGatewayId}' \
-      --output table
+    REGION=$(terraform output -raw region)
+    A_ID=$(terraform output -raw spoke_a_instance_id)
+    SUBNET=$(aws ec2 describe-instances --region "$REGION" --instance-ids "$A_ID"       --query 'Reservations[0].Instances[0].SubnetId' --output text)
+    RTB=$(aws ec2 describe-route-tables --region "$REGION"       --filters "Name=association.subnet-id,Values=$SUBNET"       --query 'RouteTables[0].RouteTableId' --output text)
+    echo "region=$REGION  spoke A subnet=$SUBNET  route table=$RTB"
+
+    aws ec2 describe-route-tables --region "$REGION" --route-table-ids "$RTB"       --query 'RouteTables[0].Routes[].{Dest:DestinationCidrBlock,Target:TransitGatewayId,Local:GatewayId}'       --output table
     ```
     <!-- source: facts_extracted_v2.md §"Route Tables" -->
 
-    **Or avoid the substitution entirely** - read your id straight out of your own `terraform.tfvars`, so there is nothing to edit and nothing to get wrong:
+    Finding the route table *through the subnet association* is also how you would do it in a real incident - you rarely know the route table id, but you always know the instance that is failing.
 
-    ```bash
-    ID=$(awk -F'"' '/^[[:space:]]*student_id/{print $2}' terraform.tfvars)
-    echo "using student id: $ID"
-    aws ec2 describe-route-tables \
-      --region "$REGION" \
-      --filters "Name=tag:Name,Values=io106-$ID-spoke_a-rt" \
-      --query 'RouteTables[0].Routes[].{Dest:DestinationCidrBlock,Target:TransitGatewayId}' \
-      --output table
-    ```
-    <!-- source: facts_extracted_v2.md §"Route Tables" -->
+    **If `echo` prints an empty `$RTB`**, stop and read the line above it: an empty `REGION` or `SUBNET` is the cause, not a missing route table.
+
+    In the console the equivalent is **VPC > Route tables**, select `io106-<your_id>-spoke_a-rt` (substitute your own id - the account is shared by the whole class), then the **Routes** tab.
 
     You should see routes for the local CIDR (`10.106.1.0/24`) and for the transit VPC (`10.106.0.0/24` via the TGW), but **no** entry for `10.106.2.0/24` (spoke B). That missing line is the fault.
 

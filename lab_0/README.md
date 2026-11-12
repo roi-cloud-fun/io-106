@@ -382,6 +382,20 @@ whoami && pwd
 
 If that returns `ec2-user` and the `lab_env_student` path, you are fine - carry on. (Your instructor can set a proper prompt for everyone; it is cosmetic.) Tell your instructor if `whoami` says `ssm-user`, though - that one is a real Session Manager preference to fix, not something you should work around every session.
 
+### An `aws` command hangs, then times out (instead of erroring)
+
+You are running it **inside a spoke instance** instead of on the deploy box. The spoke VPCs are fully private and carry only the `ssm`, `ec2messages` and `ssmmessages` interface endpoints - there is **no `ec2` API endpoint**, no NAT and no internet gateway - so a call like `aws ec2 describe-route-tables` has nowhere to go and simply waits until it gives up. (The spoke instance role carries only `AmazonSSMManagedInstanceCore` as well, so it would have no permission even if the request could get out.)
+
+The tell is the *shape* of the failure: a **timeout** means unroutable, whereas a permissions problem comes back immediately as `AccessDenied` or `UnauthorizedOperation`. Get back to the deploy box and re-run:
+
+```bash
+exit            # leaves the spoke session
+whoami && pwd   # expect ec2-user and .../lab_env_student
+```
+<!-- source: facts_extracted_v2.md §"Interface Endpoints (PrivateLink)" -->
+
+This is worth noticing rather than just working around: it is the private-VPC design proving itself. Those instances can be fully *managed* over Session Manager while having no ability to reach the AWS control plane at all.
+
 ### `verify.sh` reports `WARN: no log streams in /io106/…/flowlogs-…`
 
 Expected, and not a failure - the script says so itself. VPC Flow Logs take up to about **10 minutes** to deliver their first batch after an apply. Everything else should PASS. Re-run `./verify.sh` later and it becomes a PASS on its own; Lab 4 depends on those records existing, so it is worth confirming before you get there.
