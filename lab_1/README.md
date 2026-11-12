@@ -265,6 +265,10 @@ The route is defined in `network.tf` as `aws_route.spoke_a_to_spoke_b`, guarded 
     ```
     <!-- source: facts_extracted_v2.md §"Transit Gateway" -->
 
+    Terraform prints the plan again and waits for confirmation - type `yes`
+    and press **Enter**. It will not proceed until you do; nothing has changed
+    in AWS until you answer.
+
 > **Note:** The fast reset is `terraform apply -var scenario=healthy`, which also restores the route. The point of editing the resource is to practice the real workflow - in production you repair the configuration, you do not have a "make it healthy" switch.
 
 **Expected Result:** Apply completes with `1 added`. Spoke A's route table now contains `10.106.2.0/24 -> tgw-...`.

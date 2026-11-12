@@ -235,6 +235,10 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
     ```
     <!-- source: course_outline_v3.md §"Lab 2" -->
 
+    Terraform prints the plan again and waits for confirmation - type `yes`
+    and press **Enter**. It will not proceed until you do; nothing has changed
+    in AWS until you answer.
+
 > **Note:** `terraform apply -var scenario=healthy` is the quick reset and also detaches the boundary. Editing the attachment is the realistic repair - you corrected the role so its policy is no longer capped.
 
 > **Do not over-fix.** The temptation is to "make it work" by widening the boundary to `"Action": "*"` or deleting it entirely without thinking. A permissions boundary (like an SCP) is a deliberate guardrail - the right fix is to allow the *specific* actions the role legitimately needs, not to remove the ceiling wholesale. Here the boundary should simply not have applied to this role at all; in production you would instead get the role's OU or the SCP adjusted through change control.
