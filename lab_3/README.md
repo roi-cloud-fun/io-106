@@ -197,7 +197,27 @@ You can confirm the missing association from the console or the CLI. Use whichev
 
 **Console path:**
 
-11. **Open** the **Route 53** console, go to **Hosted zones**, and click **lab.internal** (it is marked **Private hosted zone**). At the top of the page, **expand the _Hosted zone details_ section** - it is collapsed by default, and the associated VPCs are hidden inside it.
+> [!IMPORTANT]
+> **Every student's zone is called `lab.internal` - pick yours by Description, not by name.**
+>
+> The account is shared, so **Hosted zones** lists one `lab.internal` per student.
+> They are genuinely separate zones and they do not conflict: a private hosted
+> zone only answers queries from the VPCs it is associated to, and yours is
+> associated only to your VPCs. But the **Name** column cannot tell them apart.
+>
+> Identify yours by the **Description** column, which reads
+> `io106-<your_id> private zone`. If you want to be certain, print your zone id
+> first and match it in the **Hosted zone ID** column:
+>
+> ```bash
+> terraform output -raw lab_internal_zone_id
+> ```
+>
+> Opening another student's zone is harmless - it is read-only here - but you
+> would be looking at *their* VPC associations and would conclude the fault is
+> somewhere it is not.
+
+11. **Open** the **Route 53** console, go to **Hosted zones**, and click the `lab.internal` row whose **Description** is `io106-<your_id> private zone` (it is marked **Private hosted zone**). At the top of the page, **expand the _Hosted zone details_ section** - it is collapsed by default, and the associated VPCs are hidden inside it.
 
 12. In the expanded **Hosted zone details**, read the **VPCs** list - these are the VPCs allowed to resolve names in this zone. (You can also click **Edit** to see the full editable set.)
 
