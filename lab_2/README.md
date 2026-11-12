@@ -393,6 +393,8 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
     ```
     <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
 
+**Expected Result:** `create-network-insights-path` now returns a `nip-...` id instead of `UnauthorizedOperation`. The cap is gone; the role's policy is back in full effect.
+
 > [!IMPORTANT]
 > **Always start an analysis after creating a path - or the console shows a
 > spinner forever.** `create-network-insights-path` only defines the path;
@@ -410,11 +412,7 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
 > Expect `succeeded  False  ENI_SG_RULES_MISMATCH` on this A-to-B path - the
 > analysis **ran**, which is the thing Task 7 is proving. It reports "not
 > reachable" because this lab's spoke security groups only permit ICMP and
-> Reachability Analyzer can only test TCP or UDP. That is by design, not a
-> leftover fault.
-    <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
-
-**Expected Result:** `create-network-insights-path` now returns a `nip-...` id instead of `UnauthorizedOperation`. The cap is gone; the role's policy is back in full effect.
+> Reachability Analyzer can only test TCP or UDP. That is by design, not a leftover fault.
 
 **If it is still denied,** you are testing faster than IAM propagates - this was measured at 13 seconds on this stack. Wait ~15 seconds and run the command again before concluding the fix did not work. Your `get-role` check above is the authoritative answer: if it printed `null`, the boundary really is detached.
 
