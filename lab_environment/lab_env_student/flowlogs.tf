@@ -64,5 +64,14 @@ resource "aws_flow_log" "this" {
   iam_role_arn    = aws_iam_role.flow_logs.arn
   log_destination = aws_cloudwatch_log_group.flow_logs.arn
 
+  # 60s, not the AWS default of 600s.
+  #
+  # The default aggregates for TEN MINUTES before publishing, which makes Lab 4
+  # Task 4 -- find the REJECT record, the capstone's FIRST diagnostic step --
+  # unusable inside a 45-minute lab. Measured 2026-11-12 on a clean deploy: with
+  # the default, a REJECT from a fresh ping was still absent minutes later.
+  # 60 is the only other value AWS accepts.
+  max_aggregation_interval = 60
+
   tags = { Name = "${local.name_prefix}-${each.key}-flowlog" }
 }
