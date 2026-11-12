@@ -154,43 +154,63 @@ A good engineer confirms the tool's verdict against the resource itself.
 > PrivateLink design working: the instance can be *managed* over SSM without
 > being able to reach the control plane itself.)
 
-9. **Inspect** spoke A's route table directly - **back on the deploy box.** If you are still inside the spoke A session from Task 3, `exit` first:
+9. **Inspect** spoke A's route table directly - **back on the deploy box.** If you are still inside the spoke A session from Task 3, leave it first:
 
     ```bash
-    exit            # ONLY if you are still in the spoke A session
-    whoami && pwd   # expect ec2-user and .../lab_env_student
+    exit
     ```
     <!-- source: course_outline_v3.md §"Lab 1" -->
 
-    Derive everything from your own state, so there is no student id to substitute and no region to guess - both of which silently return **empty output** rather than an error:
+    Confirm where you are:
 
     ```bash
-    # 1. your own region and spoke A instance, straight out of Terraform state
+    whoami && pwd
+    ```
+    <!-- source: course_outline_v3.md §"Lab 1" -->
+
+    Expect `ec2-user` and a path ending `/lab_env_student`.
+
+    You are going to work from spoke A's instance id to its subnet, and from that subnet to the route table attached to it. Nothing below needs your student id typed in, and nothing needs a region guessed - **each block prints the value it found, so check it is not empty before running the next one.**
+
+    **9a. Your region and spoke A instance, from Terraform state:**
+
+    ```bash
     REGION=$(terraform output -raw region)
     A_ID=$(terraform output -raw spoke_a_instance_id)
+    echo "region=$REGION instance=$A_ID"
+    ```
+    <!-- source: course_outline_v3.md §"Lab 1" -->
 
-    # 2. which subnet is spoke A in?
-    SUBNET=$(aws ec2 describe-instances --region "$REGION" --instance-ids "$A_ID" \
-      --query 'Reservations[0].Instances[0].SubnetId' --output text)
+    Expect something like `region=us-east-1 instance=i-0abc...`. If either side is blank you are not in the module directory - `cd ~/io-106/lab_environment/lab_env_student` and retry.
 
-    # 3. which route table is attached to that subnet? THIS is where the route
-    #    table id comes from - you never look it up by hand.
-    RTB=$(aws ec2 describe-route-tables --region "$REGION" \
-      --filters "Name=association.subnet-id,Values=$SUBNET" \
-      --query 'RouteTables[0].RouteTableId' --output text)
+    **9b. Which subnet is spoke A in?**
 
-    echo "region=$REGION  subnet=$SUBNET  route table=$RTB"
+    ```bash
+    SUBNET=$(aws ec2 describe-instances --region "$REGION" --instance-ids "$A_ID" --query 'Reservations[0].Instances[0].SubnetId' --output text)
+    echo "subnet=$SUBNET"
+    ```
+    <!-- source: facts_extracted_v2.md §"Subnets" -->
 
-    # 4. now list that route table's routes ($RTB came from step 3)
-    aws ec2 describe-route-tables --region "$REGION" --route-table-ids "$RTB" \
-      --query 'RouteTables[0].Routes[].{Dest:DestinationCidrBlock,Target:TransitGatewayId,Local:GatewayId}' \
-      --output table
+    Expect `subnet=subnet-0...`. If this hangs and times out, you are still inside a spoke instance - `exit` and start again at 9a.
+
+    **9c. Which route table is attached to that subnet?** This is where the route table id comes from - you never look it up by hand:
+
+    ```bash
+    RTB=$(aws ec2 describe-route-tables --region "$REGION" --filters "Name=association.subnet-id,Values=$SUBNET" --query 'RouteTables[0].RouteTableId' --output text)
+    echo "route table=$RTB"
     ```
     <!-- source: facts_extracted_v2.md §"Route Tables" -->
 
-    Finding the route table *through the subnet association* is also how you would do it in a real incident - you rarely know the route table id, but you always know the instance that is failing.
+    Expect `route table=rtb-0...`. An empty value here means `$SUBNET` was empty in 9b, not that the route table is missing.
 
-    **If `echo` prints an empty `$RTB`**, stop and read the line above it: an empty `REGION` or `SUBNET` is the cause, not a missing route table.
+    **9d. List that route table's routes:**
+
+    ```bash
+    aws ec2 describe-route-tables --region "$REGION" --route-table-ids "$RTB" --query 'RouteTables[0].Routes[].{Dest:DestinationCidrBlock,Target:TransitGatewayId,Local:GatewayId}' --output table
+    ```
+    <!-- source: facts_extracted_v2.md §"Route Tables" -->
+
+    Finding the route table *through the subnet association* is how you would do it in a real incident - you rarely know the route table id, but you always know the instance that is failing.
 
     In the console the equivalent is **VPC > Route tables**, select `io106-<your_id>-spoke_a-rt` (substitute your own id - the account is shared by the whole class), then the **Routes** tab.
 
