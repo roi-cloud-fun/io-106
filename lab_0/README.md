@@ -196,7 +196,7 @@ Every named resource is prefixed `io106-<student_id>-` so all eight students sha
     #   student_id = "s01"        (use YOUR assigned id)
     #   region     = "us-east-2"  (use the region your instructor gave you)
     ```
-<!-- source: course_outline_v3.md §"Lab 0" -->
+    <!-- source: course_outline_v3.md §"Lab 0" -->
 
     `student_id` must be lowercase alphanumeric, 2-12 characters. Leave `scenario = "healthy"` for Lab 0.
 

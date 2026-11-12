@@ -262,7 +262,7 @@ The route is defined in `network.tf` as `aws_route.spoke_a_to_spoke_b`, guarded 
     ```bash
     aws ssm start-session --target "$A_ID" --region "$REGION"
     ```
-<!-- source: https://docs.aws.amazon.com/cli/latest/reference/ssm/ -->
+    <!-- source: https://docs.aws.amazon.com/cli/latest/reference/ssm/ -->
 
     Then, **inside the spoke A session**, ping spoke B and exit (paste these separately - the session is a new shell, so `$B_IP` is not set in here; type the address from Task 2 in place of `<SPOKE_B_IP>`):
 

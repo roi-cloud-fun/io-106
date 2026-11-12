@@ -96,7 +96,7 @@ Fix only one and the path stays down. That is the whole point.
     echo "A=$A_ID/$A_IP  B=$B_ID/$B_IP  region=$REGION"
     echo "netops=$NETOPS_ARN  logs=$LOG_GROUP"
     ```
-<!-- source: course_outline_v3.md §"Lab 4" -->
+    <!-- source: course_outline_v3.md §"Lab 4" -->
 
 2. **Apply** the `lab4` scenario. Your `student_id` is already set in `terraform.tfvars` - do **not** pass `-var student_id` on the command line (a hardcoded id renames every resource and forces a destroy/recreate of your whole stack).
 
@@ -104,7 +104,7 @@ Fix only one and the path stays down. That is the whole point.
     terraform plan -var scenario=lab4     # ALWAYS read the plan first
     terraform apply -var scenario=lab4
     ```
-<!-- source: course_outline_v3.md §"Lab 4" -->
+    <!-- source: course_outline_v3.md §"Lab 4" -->
 
     Read the plan. Terraform reports **two** resources destroyed - one security-group rule and one route:
 
@@ -127,7 +127,7 @@ Fix only one and the path stays down. That is the whole point.
     ```bash
     aws ssm start-session --target "$A_ID" --region "$REGION"
     ```
-<!-- source: https://docs.aws.amazon.com/cli/latest/reference/ssm/ -->
+    <!-- source: https://docs.aws.amazon.com/cli/latest/reference/ssm/ -->
 
     Then, **inside the session**, ping spoke B and exit (paste these separately - the session is a new shell; use the spoke B IP printed in Task 1):
 
@@ -135,7 +135,7 @@ Fix only one and the path stays down. That is the whole point.
     ping -c 3 -W 2 <B_IP>    # -c 3 = 3 packets then stop; -W 2 = give up after 2s per packet
     exit
     ```
-<!-- source: course_outline_v3.md §"Lab 4" -->
+    <!-- source: course_outline_v3.md §"Lab 4" -->
 
 > **Expected Result:** 100% packet loss - spoke A cannot reach spoke B. Symptom confirmed. Now you investigate from the read-only role, not from the instance.
 
@@ -159,7 +159,7 @@ A SYF network engineer investigates with read-only visibility, not admin. Assume
 
     aws sts get-caller-identity --query Arn --output text
     ```
-<!-- source: facts_extracted_v2.md §"Cross-Account IAM Roles" -->
+    <!-- source: facts_extracted_v2.md §"Cross-Account IAM Roles" -->
 
 > **Expected Result:** The ARN ends with `assumed-role/io106-<id>-network-operations/lab4-troubleshoot`. You are now operating with read-only network visibility plus the Reachability Analyzer permissions the role grants. You cannot change anything from here - that is intentional. Diagnosis is read-only; the fix happens back in Terraform with your own identity.
 
@@ -178,7 +178,7 @@ VPC Flow Logs record an `ACCEPT` or `REJECT` verdict for traffic at each ENI. A 
       --filter-pattern "[version, account, eni, srcaddr=10.106.1.*, dstaddr=$B_IP, srcport, dstport, protocol=1, packets, bytes, start, end, action=REJECT, status]" \
       --query 'events[].message' --output text
     ```
-<!-- source: facts_extracted_v2.md §"VPC Flow Logs" -->
+    <!-- source: facts_extracted_v2.md §"VPC Flow Logs" -->
 
     **Console path (equivalent).** Open **CloudWatch > Logs > Log Analytics**, **select your flow-log group first** (the `flow_log_group` output - `terraform output -raw flow_log_group`), set the time range to the **last 30 minutes**, and run this Logs Insights query (replace `<B_IP>` with your spoke B IP):
 
@@ -212,7 +212,7 @@ Reachability Analyzer is static analysis of the network configuration - it prove
       --query 'NetworkInsightsPath.NetworkInsightsPathId' --output text)
     echo "PATH_ID=$PATH_ID"          # expect nip-...  (empty = create failed; read the error above)
     ```
-<!-- source: https://docs.aws.amazon.com/cli/latest/reference/ec2/ -->
+    <!-- source: https://docs.aws.amazon.com/cli/latest/reference/ec2/ -->
 
     Start the analysis (needs a valid `PATH_ID`):
 
@@ -223,7 +223,7 @@ Reachability Analyzer is static analysis of the network configuration - it prove
       --query 'NetworkInsightsAnalysis.NetworkInsightsAnalysisId' --output text)
     echo "ANALYSIS_ID=$ANALYSIS_ID"  # expect nia-...  (empty = start failed, usually an empty PATH_ID)
     ```
-<!-- source: https://docs.aws.amazon.com/cli/latest/reference/ec2/ -->
+    <!-- source: https://docs.aws.amazon.com/cli/latest/reference/ec2/ -->
 
     Wait a few seconds for it to finish, then read the result:
 
@@ -235,10 +235,10 @@ Reachability Analyzer is static analysis of the network configuration - it prove
       --query 'NetworkInsightsAnalyses[0].{Status:Status,Reachable:NetworkPathFound,Explanation:Explanations[0].ExplanationCode}' \
       --output table
     ```
-<!-- source: https://docs.aws.amazon.com/cli/latest/reference/ec2/ -->
+    <!-- source: https://docs.aws.amazon.com/cli/latest/reference/ec2/ -->
 
     (If `Status` shows `running`, wait a few more seconds and re-run the last command.)
-<!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
+    <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
 
 > **Expected Result:** `Status` is `succeeded`, `Reachable` (NetworkPathFound) is `false`, and the explanation code names a missing route (for example `NO_ROUTE_TO_DESTINATION` / no route to destination in the source route table). That is **Fault 2**: spoke B's VPC route table has no route back to spoke A's CIDR (`10.106.1.0/24`) via the Transit Gateway. The return traffic has nowhere to go.
 
@@ -249,7 +249,7 @@ Reachability Analyzer is static analysis of the network configuration - it prove
       --filters "Name=tag:Name,Values=io106-*-spoke_b-rt" \
       --query 'RouteTables[0].Routes[].DestinationCidrBlock' --output text
     ```
-<!-- source: facts_extracted_v2.md §"Route Tables" -->
+    <!-- source: facts_extracted_v2.md §"Route Tables" -->
 
 > **Expected Result:** The list includes spoke B's own CIDR and the transit CIDR (`10.106.0.0/24`) but **not** `10.106.1.0/24`. Two faults are now confirmed, at two layers, by two tools.
 
@@ -259,7 +259,7 @@ Reachability Analyzer is static analysis of the network configuration - it prove
     aws ec2 delete-network-insights-analysis --region "$REGION" --network-insights-analysis-id "$ANALYSIS_ID" >/dev/null
     aws ec2 delete-network-insights-path --region "$REGION" --network-insights-path-id "$PATH_ID" >/dev/null
     ```
-<!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
+    <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
 
 ---
 
@@ -273,7 +273,7 @@ Diagnosis is done from read-only. The fix happens with your own identity, in cod
     unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
     aws sts get-caller-identity --query Arn --output text   # confirm you are back to your own identity
     ```
-<!-- source: facts_extracted_v2.md §"Cross-Account IAM Roles" -->
+    <!-- source: facts_extracted_v2.md §"Cross-Account IAM Roles" -->
 
     The `Arn` must **not** contain `network-operations`. If you skip this `unset`, Terraform runs as the read-only role and `plan`/`apply` fail with a wall of `AccessDenied` errors naming `assumed-role/io106-<id>-network-operations` - for example *not authorized to perform `iam:ListRolePolicies` / `ssm:GetParameter` / `logs:ListTagsForResource`*. That is the role being read-only **by design** - it cannot even refresh all of the state, let alone change it. If you see those errors, you forgot to unset: run the two commands above and retry.
 
@@ -305,7 +305,7 @@ Diagnosis is done from read-only. The fix happens with your own identity, in cod
     terraform plan        # confirm: 2 to add (the ingress rule + the route), 0 to destroy
     terraform apply
     ```
-<!-- source: course_outline_v3.md §"Lab 4" -->
+    <!-- source: course_outline_v3.md §"Lab 4" -->
 
     Read the plan: Terraform should report **2 to add** - the ingress rule and the route.
 
@@ -322,7 +322,7 @@ Diagnosis is done from read-only. The fix happens with your own identity, in cod
     ```bash
     aws ssm start-session --target "$A_ID" --region "$REGION"
     ```
-<!-- source: https://docs.aws.amazon.com/cli/latest/reference/ssm/ -->
+    <!-- source: https://docs.aws.amazon.com/cli/latest/reference/ssm/ -->
 
     Then, **inside the session**, ping spoke B and exit (paste separately - the session is a new shell):
 
@@ -330,7 +330,7 @@ Diagnosis is done from read-only. The fix happens with your own identity, in cod
     ping -c 3 -W 2 <B_IP>
     exit
     ```
-<!-- source: course_outline_v3.md §"Lab 4" -->
+    <!-- source: course_outline_v3.md §"Lab 4" -->
 
 > **Expected Result:** Replies, 0% packet loss. Both the inbound SG admit and the return route are in place, so the round trip completes.
 
@@ -339,7 +339,7 @@ Diagnosis is done from read-only. The fix happens with your own identity, in cod
     ```bash
     ./verify.sh
     ```
-<!-- source: course_outline_v3.md §"Lab 4" -->
+    <!-- source: course_outline_v3.md §"Lab 4" -->
 
 > **Expected Result:** `ALL CHECKS PASSED -- healthy baseline confirmed.` Check 4 (`spoke_a -> spoke_b reachable over the TGW`) passes. If it still fails, you fixed only one fault - go back and confirm *both* the `security_groups.tf` rule and the `network.tf` route had their `count` guard removed.
 

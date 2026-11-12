@@ -238,6 +238,7 @@ You have two ways to restore the association. The **pedagogical fix** edits the 
     ```bash
     aws ssm start-session --target "$A_ID" --region "$REGION"
     ```
+    <!-- source: https://docs.aws.amazon.com/cli/latest/reference/ssm/ -->
 
     Then, **inside the session**, resolve the name and exit (paste these separately - the session is a new shell):
 

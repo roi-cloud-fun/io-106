@@ -63,7 +63,7 @@ Before you break it, see the role doing real work so the failure is unmistakable
     A_ID=$(terraform output -raw spoke_a_instance_id)
     B_ID=$(terraform output -raw spoke_b_instance_id)
     ```
-<!-- source: course_outline_v3.md §"Lab 2" -->
+    <!-- source: course_outline_v3.md §"Lab 2" -->
 
 2. **Assume** the network-operations role and run a real diagnostic under it: create a Reachability Analyzer path between your two spoke instances. Export the temporary credentials into your shell first:
 
@@ -81,7 +81,7 @@ Before you break it, see the role doing real work so the failure is unmistakable
     aws ec2 delete-network-insights-path --network-insights-path-id "$PID"             # tidy up
     unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN                     # back to your identity
     ```
-<!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
+    <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
 
 **Expected Result:** The `assume-role` returns temporary `ASIA...` credentials. Under them, both the `describe` and the `create-network-insights-path` succeed - the role can list the network *and* run Reachability Analyzer. (Reachability Analyzer paths only accept `tcp` or `udp`, not `icmp`.) Remember to `unset` the variables so your shell returns to your own identity.
 
@@ -97,7 +97,7 @@ Before you break it, see the role doing real work so the failure is unmistakable
     terraform plan -var scenario=lab2     # review the change before applying
     terraform apply -var scenario=lab2
     ```
-<!-- source: course_outline_v3.md §"Lab 2" -->
+    <!-- source: course_outline_v3.md §"Lab 2" -->
 
     Read the plan. It creates `aws_iam_policy.netops_boundary` (if not already present) and updates `aws_iam_role.network_operations` to set its `permissions_boundary`. The role's `network-visibility` policy is unchanged. Type `yes`.
 
@@ -123,7 +123,7 @@ Before you break it, see the role doing real work so the failure is unmistakable
     aws ec2 create-network-insights-path --source "$A_ID" --destination "$B_ID" --protocol tcp  # now DENIED
     unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
     ```
-<!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
+    <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
 
 **Expected Result:** The assume-role *still succeeds* and the `describe` *still works* - but `create-network-insights-path` now fails with:
 
@@ -154,7 +154,7 @@ CloudTrail records the failed call with the caller, the action, and the error - 
     # one readable line per matching event (jq is pre-installed on the deploy box):
     jq -r '.Events[] | (.CloudTrailEvent|fromjson) | "\(.eventTime)  errorCode=\(.errorCode // "-")  caller=\(.userIdentity.arn // "-")"' events.json
     ```
-<!-- source: https://docs.aws.amazon.com/cli/latest/reference/cloudtrail/ -->
+    <!-- source: https://docs.aws.amazon.com/cli/latest/reference/cloudtrail/ -->
 
     You should see two `CreateNetworkInsightsPath` lines: the **successful** create from Task 1 (`errorCode=-`) and the **denied** one from Task 3 (`errorCode=Client.UnauthorizedOperation`, or `AccessDenied`). No `jq`? Find the denial without scrolling: `grep -o 'errorCode[^,]*' events.json`.
 
@@ -178,7 +178,7 @@ This is the core skill: when an action is denied but you believe it should be al
     aws iam get-role-policy --role-name "$ROLE_NAME" --policy-name network-visibility \
       --query 'PolicyDocument.Statement[?Sid==`ReachabilityAnalyzer`].Action'
     ```
-<!-- source: facts_extracted_v2.md §"Cross-Account IAM Roles" -->
+    <!-- source: facts_extracted_v2.md §"Cross-Account IAM Roles" -->
 
     You will see `ec2:CreateNetworkInsightsPath` (and the other network-insights actions) listed and `Allow`ed. So the identity policy is **not** the problem.
 
@@ -187,7 +187,7 @@ This is the core skill: when an action is denied but you believe it should be al
     ```bash
     aws iam get-role --role-name "$ROLE_NAME" --query 'Role.PermissionsBoundary'
     ```
-<!-- source: facts_extracted_v2.md §"Service Control Policies" -->
+    <!-- source: facts_extracted_v2.md §"Service Control Policies" -->
 
 9. **Read the boundary's contents** - the document that defines the ceiling:
 
@@ -198,7 +198,7 @@ This is the core skill: when an action is denied but you believe it should be al
     aws iam get-policy-version --policy-arn "$BARN" --version-id "$VID" \
       --query 'PolicyVersion.Document.Statement[].Action'
     ```
-<!-- source: facts_extracted_v2.md §"Service Control Policies" -->
+    <!-- source: facts_extracted_v2.md §"Service Control Policies" -->
 
 **Expected Result:** `get-role` shows a `PermissionsBoundary` is attached (its ARN ends `-netops-boundary`). Reading the boundary, its allowed actions include `ec2:Describe*`, `ec2:SearchTransitGatewayRoutes`, logs, Route 53, and so on - **but none of the `ec2:*NetworkInsights*` actions**. A role's effective permissions are the **intersection** of its identity policy and its boundary. Reachability Analyzer is in the policy but not in the boundary, so it is capped out. Diagnosis complete: the denial is the permissions boundary, not the role policy. *(In SYF's production org, you would run the same comparison against the OU's SCP instead of a boundary.)*
 
@@ -224,7 +224,7 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
     ```bash
     terraform plan -var scenario=lab2
     ```
-<!-- source: course_outline_v3.md §"Lab 2" -->
+    <!-- source: course_outline_v3.md §"Lab 2" -->
 
     The plan shows an in-place update to `aws_iam_role.network_operations` removing its `permissions_boundary`, even though `scenario=lab2`.
 
@@ -233,7 +233,7 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
     ```bash
     terraform apply -var scenario=lab2
     ```
-<!-- source: course_outline_v3.md §"Lab 2" -->
+    <!-- source: course_outline_v3.md §"Lab 2" -->
 
 > **Note:** `terraform apply -var scenario=healthy` is the quick reset and also detaches the boundary. Editing the attachment is the realistic repair - you corrected the role so its policy is no longer capped.
 
@@ -263,7 +263,7 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
     aws ec2 delete-network-insights-path --network-insights-path-id "$PID"
     unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
     ```
-<!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
+    <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
 
 **Expected Result:** `create-network-insights-path` now returns a `nip-...` id instead of `UnauthorizedOperation`. The cap is gone; the role's policy is back in full effect. Remember to `unset` the assumed credentials.
 
