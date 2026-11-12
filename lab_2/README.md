@@ -66,6 +66,24 @@ Before you break it, see the role doing real work so the failure is unmistakable
     ```
     <!-- source: course_outline_v3.md §"Lab 2" -->
 
+    Then check which scenario your stack is currently in:
+
+    ```bash
+    terraform output -raw scenario
+    ```
+    <!-- source: course_outline_v3.md §"Lab 2" -->
+
+> [!IMPORTANT]
+> **This task only works if the lab2 fault is NOT already applied.** Task 1 is the "before" picture - it shows Reachability Analyzer *succeeding* under the role, so that the denial in Task 3 is unmistakable.
+>
+> If the command above printed **`lab2`**, the boundary is already attached and step 2's Reachability Analyzer call will fail with `UnauthorizedOperation` instead of succeeding. Reset to healthy first, then come back:
+>
+> ```bash
+> terraform apply -var scenario=healthy
+> ```
+>
+> Anything else (`healthy`, or `lab1` after you repaired it in Lab 1) is fine - the boundary is only attached under `lab2`.
+
 2. **Assume** the network-operations role and run a real diagnostic under it: create a Reachability Analyzer path between your two spoke instances.
 
     First, see the mechanics directly. `sts assume-role` returns a **temporary** credential set - an `ASIA...` access key, a secret, and a session token - which expire (an hour here, set by the role's `max_session_duration`). These are *not* long-lived keys, and you hold no stored secret anywhere: the `assume-role` call itself is authenticated by your deploy box's own instance role.
@@ -97,12 +115,14 @@ Before you break it, see the role doing real work so the failure is unmistakable
 
     `credential_source = Ec2InstanceMetadata` tells the CLI to authenticate with the instance role and then assume `role_arn` for you - refreshing the temporary credentials automatically as they expire. Expect the ARN to come back as `assumed-role/io106-<your_id>-network-operations/botocore-session-...`.
 
-    Run the diagnostic under the role:
+    Now prove the role can **read** the network. Ask it for your own two spoke instances:
 
     ```bash
-    aws --profile netops ec2 describe-route-tables --query 'length(RouteTables)' --output text
+    aws --profile netops ec2 describe-instances --region "$REGION" --instance-ids "$A_ID" "$B_ID" --query 'Reservations[].Instances[].[InstanceId,PrivateIpAddress]' --output table
     ```
     <!-- source: facts_extracted_v2.md §"Cross-Account IAM Roles" -->
+
+    You should get back your two instance ids with their `10.106.1.x` and `10.106.2.x` private IPs - values you recognise from Lab 0's outputs. That is the "see everything" half of the role working: it answered a question about your network without you holding any permission of your own.
 
     ```bash
     aws --profile netops ec2 create-network-insights-path --source "$A_ID" --destination "$B_ID" --protocol tcp --query 'NetworkInsightsPath.NetworkInsightsPathId' --output text
