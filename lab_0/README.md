@@ -68,6 +68,7 @@ By the end of this lab, you will:
     whoami      # expect: ec2-user
     pwd         # expect: /home/ec2-user/io-106/lab_environment/lab_env_student
     ```
+    <!-- source: course_outline_v3.md §"Lab 0" -->
 
     > **If `whoami` says `ssm-user` and `pwd` says `/usr/bin`,** Session Manager
     > dropped you into its default identity instead of `ec2-user`. You cannot work
@@ -270,17 +271,31 @@ The instances run the SSM agent and register with Systems Manager over the priva
 
 You will live inside these instances during the troubleshooting labs, so connect to one now while everything is healthy.
 
-15. **Start a Session Manager session** to the spoke A instance (no SSH, no key, no public IP - this works purely through the SSM interface endpoints):
+15. **Print spoke B's IP first, then start the session.** Shell variables do **not** survive into a Session Manager session - it is a brand-new shell on a different machine - so note this value down now; you will type it by hand in the next step:
 
     ```bash
+    terraform output -raw spoke_b_instance_private_ip; echo    # e.g. 10.106.2.12 -- note it down
     aws ssm start-session --target "$(terraform output -raw spoke_a_instance_id)"
     ```
     <!-- source: facts_extracted_v2.md §"Interface Endpoints (PrivateLink)" -->
 
-16. **From inside the session**, confirm the two things Lab 1 and Lab 3 will later break:
+    > **If this returns `TargetNotConnected`,** the instance is almost certainly
+    > fine - you are looking in the wrong **region**. Check that your shell and
+    > your stack agree, and retry:
+    >
+    > ```bash
+    > echo $AWS_DEFAULT_REGION                 # your shell
+    > terraform output -raw region             # where you actually deployed
+    > ```
+    >
+    > If they differ, either `export AWS_DEFAULT_REGION=$(terraform output -raw region)`
+    > or add `--region "$(terraform output -raw region)"` to the command.
+
+16. **From inside the session**, confirm the two things Lab 1 and Lab 3 will later break. Replace `<SPOKE_B_IP>` with the address you noted in step 15 - this is a placeholder, not a variable, so pasting it unchanged will fail with `Name or service not known`:
 
     ```bash
-    ping -c 3 SPOKE_B_IP            # replace with spoke_b_instance_private_ip output
+    # inside the spoke A session
+    ping -c 3 <SPOKE_B_IP>         # the address from step 15, typed in full
     getent hosts app.lab.internal  # should resolve to a 10.106.x.x address
     exit
     ```

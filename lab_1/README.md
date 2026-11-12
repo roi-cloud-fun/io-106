@@ -95,11 +95,11 @@ By the end of this lab, you will:
     ```
     <!-- source: course_outline_v3.md §"Lab 1" -->
 
-5. **From inside the session**, try to reach spoke B (use the `$B_IP` value printed in Task 2):
+5. **From inside the session**, try to reach spoke B. `$B_IP` does **not** exist in here - a Session Manager session is a new shell on a different machine - so type the address Task 2 printed. `<SPOKE_B_IP>` is a placeholder; pasting it unchanged fails with `Name or service not known`:
 
     ```bash
     # inside the spoke A session
-    ping -c 4 -W 2 SPOKE_B_IP
+    ping -c 4 -W 2 <SPOKE_B_IP>
     exit
     ```
     <!-- source: course_outline_v3.md §"Lab 1" -->
@@ -118,7 +118,7 @@ Reachability Analyzer evaluates the *configured* path - routes, security groups,
     - **Name:** `io106-<your_id>-a-to-b` - the account is shared across all students, so name your path with your student id (the same `io106-<student_id>-` convention as every other resource) or you will not be able to find yours among the others.
     - **Source type:** Instance, **Source:** your spoke A instance (`io106-<id>-spoke-a`).
     - **Destination type:** Instance, **Destination:** your spoke B instance (`io106-<id>-spoke-b`).
-    - **Protocol:** ICMP (or TCP - the routing verdict is the same).
+    - **Protocol:** TCP. Reachability Analyzer paths accept only **TCP or UDP - not ICMP**. A missing route blocks every protocol, so TCP proves the routing fault just as well.
 
 8. **Click** **Create and analyze path** and wait for the analysis to complete (a few seconds to a minute). When it finishes, **open the analysis and read it in detail - do not stop at the top-line verdict.** Expand the **path details**: Reachability Analyzer lays out the forward path hop by hop - the source instance's network interface, its security group, spoke A's route table, the TGW attachment, and onward to the destination - and marks the **status** of each component. Read down the hops to the point where the path **stops**, and read the **explanation** shown at that hop.
 
@@ -199,16 +199,21 @@ The route is defined in `network.tf` as `aws_route.spoke_a_to_spoke_b`, guarded 
 
 ## Task 7: Re-Verify
 
-14. **Re-analyze** your existing path in Reachability Analyzer: select `io106-<your_id>-a-to-b` and click **Analyze path** again. Reachability Analyzer keeps an **analysis history** on each path, so the new run is saved alongside the earlier one - you can open both and compare this **Reachable** result against the earlier **Not reachable** result on the same path (no need to create a second path). Or just re-test from the instance - start a session:
+14. **Re-analyze** your existing path in Reachability Analyzer: select `io106-<your_id>-a-to-b` and click **Analyze path** again. Reachability Analyzer keeps an **analysis history** on each path, so the new run is saved alongside the earlier one and you can open both and compare them on the same path (no need to create a second path). Read the **explanation**, not just the verdict: it has **moved** from the route table to spoke B's network interface, which is the proof your routing fix landed.
+
+    > **Why the TCP path still says "Not reachable."** Your route fix is correct and the ping below will succeed, but the analysis verdict stays **Not reachable** with an explanation like `ENI_SG_RULES_MISMATCH` at spoke B's ENI. That is **by design, not a failed fix**: this lab's spoke security groups intentionally permit **ICMP only** between the spokes, so a **TCP** path can never be fully reachable here. The diagnosis you care about is that the blocker moved *past* spoke A's route table - the packet now crosses the TGW and reaches spoke B. Use the ping and `verify.sh` below as the end-to-end proof.
+
+    Now re-test from the instance - start a session:
 
     ```bash
     aws ssm start-session --target "$A_ID"
     ```
+<!-- source: https://docs.aws.amazon.com/cli/latest/reference/ssm/ -->
 
-    Then, **inside the spoke A session**, ping spoke B and exit (paste these separately - the session is a new shell):
+    Then, **inside the spoke A session**, ping spoke B and exit (paste these separately - the session is a new shell, so `$B_IP` is not set in here; type the address from Task 2 in place of `<SPOKE_B_IP>`):
 
     ```bash
-    ping -c 4 -W 2 SPOKE_B_IP
+    ping -c 4 -W 2 <SPOKE_B_IP>
     exit
     ```
     <!-- source: course_outline_v3.md §"Lab 1" -->
@@ -221,7 +226,7 @@ The route is defined in `network.tf` as `aws_route.spoke_a_to_spoke_b`, guarded 
     ```
     <!-- source: course_outline_v3.md §"Lab 1" -->
 
-**Expected Result:** The ping now succeeds (replies, 0% loss). Reachability Analyzer now returns **Reachable** - open the new analysis and walk the path: this time it runs all the way through spoke A's route table and the TGW attachment to spoke B's network interface, every hop green, whereas the earlier run stopped at the route table. And `verify.sh` reports the spoke A -> spoke B check as PASS.
+**Expected Result:** The ping now succeeds (replies, 0% loss) and `verify.sh` reports the spoke A -> spoke B check as PASS - that is your end-to-end proof. In Reachability Analyzer, open the new analysis and walk the path: this time it runs through spoke A's route table and the TGW attachment and **reaches spoke B's network interface**, whereas the earlier run stopped dead at spoke A's route table. The verdict still reads **Not reachable**, now explained at spoke B's ENI (`ENI_SG_RULES_MISMATCH`) rather than at the route table, because the lab's spoke security groups allow ICMP only - see the note in step 14. The routing fault is fixed; the SG is simply the next thing in the path for TCP.
 
 ---
 
