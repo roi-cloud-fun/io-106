@@ -147,6 +147,14 @@ elif [ "$(id -un)" != "ec2-user" ]; then
 else
   export AWS_DEFAULT_REGION="${var.region}"
 fi
+
+# Session Manager starts its shell with PS1 unset, and AL2023's /etc/bashrc only
+# sets a prompt when PS1 is already non-empty -- so bash falls back to its
+# built-in "\s-\v\$" and students see a bare "sh-5.2$" with no user, host or
+# cwd. Set a real prompt.
+if [ -t 1 ]; then
+  PS1='[\u@\h \W]\$ '
+fi
 PROFILE
     chmod 0644 /etc/profile.d/io106.sh
 

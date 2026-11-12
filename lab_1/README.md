@@ -75,13 +75,28 @@ By the end of this lab, you will:
 3. **Capture** the probe values you will use repeatedly:
 
     ```bash
+    REGION=$(terraform output -raw region)
     A_ID=$(terraform output -raw spoke_a_instance_id)
     B_IP=$(terraform output -raw spoke_b_instance_private_ip)
-    echo "spoke A instance: $A_ID   spoke B IP: $B_IP"
+    echo "region: $REGION   spoke A instance: $A_ID   spoke B IP: $B_IP"
     ```
     <!-- source: course_outline_v3.md §"Lab 1" -->
 
-**Expected Result:** Apply completes with `1 destroyed`. The `$A_ID` and `$B_IP` variables hold your spoke A instance ID and spoke B's private IP.
+    > **Capture `$REGION` and pass it to every `aws` command.** Your deploy box
+    > may well be in a **different region** from the stack you just deployed -
+    > that is normal, and it is how a real management host usually sits. The AWS
+    > CLI on an EC2 instance falls back to **that instance's own region** (via
+    > IMDS) whenever you do not pass `--region` and have not exported one. So a
+    > command with no `--region` silently asks the *wrong* region about your
+    > resources, and AWS answers truthfully that it cannot find them. Passing
+    > `--region "$REGION"` makes every command correct no matter which shell,
+    > user, or box you are on. You can check what the CLI would use with:
+    >
+    > ```bash
+    > aws configure list | grep region     # watch the right-hand "imds" / "env" source
+    > ```
+
+**Expected Result:** Apply completes with `1 destroyed`. The `$REGION`, `$A_ID` and `$B_IP` variables hold your region, your spoke A instance ID, and spoke B's private IP.
 
 ---
 
@@ -90,7 +105,7 @@ By the end of this lab, you will:
 4. **Open** a Session Manager shell on the spoke A instance:
 
     ```bash
-    aws ssm start-session --target "$A_ID"
+    aws ssm start-session --target "$A_ID" --region "$REGION"
     ```
     <!-- source: course_outline_v3.md §"Lab 1" -->
 
@@ -205,7 +220,7 @@ The route is defined in `network.tf` as `aws_route.spoke_a_to_spoke_b`, guarded 
     Now re-test from the instance - start a session:
 
     ```bash
-    aws ssm start-session --target "$A_ID"
+    aws ssm start-session --target "$A_ID" --region "$REGION"
     ```
 <!-- source: https://docs.aws.amazon.com/cli/latest/reference/ssm/ -->
 

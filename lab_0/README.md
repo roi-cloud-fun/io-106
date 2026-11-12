@@ -37,6 +37,29 @@ What you deploy:
 
 The whole stack is **fully private**: no internet gateway, no NAT. The test instances reach Systems Manager and AWS services through interface VPC endpoints (PrivateLink), and you access them through SSM Session Manager - no SSH, no key pairs, no public IPs.
 
+### Where your deploy box sits - and why it is NOT connected to any of this
+
+Your deploy box is **not** in any of the three VPCs above. It lives in its own separate VPC, with **no VPC peering, no Transit Gateway attachment, and no VPN** to the lab network - and it may not even be in the same **region**. That is deliberate, and it mirrors how real management access is built.
+
+```
+   YOUR DEPLOY BOX                        YOUR LAB STACK
+   io106-<id>-deploy                      transit + spoke A + spoke B
+   its own VPC, own region                10.106.0.0/24, .1.0/24, .2.0/24
+          |                                        ^
+          |  AWS APIs + SSM (control plane)        |
+          +----------------------------------------+
+             NO peering / NO TGW / NO route
+```
+<!-- source: course_outline_v3.md §"Lab 0" -->
+
+Two consequences worth internalising now, because they explain errors you would otherwise misread later:
+
+- **You cannot `ping` a spoke instance from the deploy box.** There is no route between them and there is not meant to be. Every `ping` in these labs runs *inside* a spoke instance, after you have opened a Session Manager session to it.
+- **Session Manager is a control-plane path, not a network path.** The SSM agent on each instance dials *outbound* to the Systems Manager service (here, through the interface endpoints). AWS brokers your session through that connection. This is exactly why you need no peering, no VPN, and no bastion host sitting inside the workload VPC.
+
+In a production environment your management host is almost never in the same VPC as the workloads either - typically a separate VPC, often a separate account, frequently a separate region. If you genuinely need **network** reachability from a management host (say a `psql` client reaching a private RDS endpoint, which SSM cannot broker for you), then you have to build a data path: **VPC peering** for a simple one-to-one, a **Transit Gateway attachment** for the hub-and-spoke case, or a VPN/Direct Connect from on-premises. In [Client]'s environment that overlay is Aviatrix. We deliberately do not peer the deploy VPC here, for two reasons: it proves SSM needs no network path, and - more practically - it keeps your management access **outside the blast radius of the faults you are about to inject**. In Labs 1 and 4 you deliberately break spoke routing; if your own box depended on that routing, you would cut yourself off from the very environment you are trying to repair.
+<!-- source: facts_extracted_v2.md §"Interface Endpoints (PrivateLink)" -->
+
 ---
 
 ## Scenario
@@ -173,6 +196,7 @@ Every named resource is prefixed `io106-<student_id>-` so all eight students sha
     #   student_id = "s01"        (use YOUR assigned id)
     #   region     = "us-east-2"  (use the region your instructor gave you)
     ```
+<!-- source: course_outline_v3.md §"Lab 0" -->
 
     `student_id` must be lowercase alphanumeric, 2-12 characters. Leave `scenario = "healthy"` for Lab 0.
 
@@ -302,6 +326,57 @@ You will live inside these instances during the troubleshooting labs, so connect
     <!-- source: facts_extracted_v2.md §"Transit Gateway" -->
 
 **Expected Result:** The ping to spoke B succeeds (replies, 0% loss) and `app.lab.internal` resolves to a `10.106.x.x` address. This is the healthy behavior; remember it, because in Lab 1 the ping will hang and in Lab 3 the name will fail to resolve.
+
+---
+
+## Troubleshooting
+
+Three failures account for nearly every problem in this lab. All three look like broken infrastructure and none of them are.
+
+### `TargetNotConnected: i-… is not connected`
+
+You ran `aws ssm start-session` and AWS says the instance is not connected - but `verify.sh` just told you it was Online. **You are almost certainly asking the wrong region.**
+
+The AWS CLI on an EC2 instance resolves its region in this order: `--region` flag, then `AWS_REGION` / `AWS_DEFAULT_REGION`, then `~/.aws/config`, and finally - with none of those set - **the region of the instance you are sitting on**, read from instance metadata. Your deploy box may be in a different region from the stack you deployed, so a command with no `--region` can quietly ask the wrong region, which truthfully answers that it has no such instance.
+
+```bash
+aws configure list | grep region          # the right-hand column names the SOURCE ("imds", "env", ...)
+terraform output -raw region              # where your stack actually is
+```
+<!-- source: https://developer.hashicorp.com/terraform/cli/commands/output -->
+
+Fix it for one command, or for the whole shell:
+
+```bash
+aws ssm start-session --target "$A_ID" --region "$(terraform output -raw region)"
+export AWS_DEFAULT_REGION=$(terraform output -raw region)      # for the rest of the session
+```
+<!-- source: https://developer.hashicorp.com/terraform/cli/commands/output -->
+
+Only if the region already matches should you suspect the instance: re-check `aws ssm describe-instance-information --region "$REGION"`, and confirm the three SSM interface endpoints exist - without `ssm`, `ec2messages` and `ssmmessages` the agent cannot register at all.
+
+### `whoami` says `ssm-user`, or the prompt is `sh-5.2$`
+
+Session Manager connects as `ssm-user` and starts in `/usr/bin` unless the account's Session Manager preferences say otherwise. You cannot work there: `/usr/bin` is not writable, and `/home/ec2-user` is mode `0700`, so `ssm-user` cannot even read `~/io-106`. Switch user:
+
+```bash
+sudo su - ec2-user
+cd ~/io-106/lab_environment/lab_env_student
+```
+<!-- source: course_outline_v3.md §"Lab 0" -->
+
+A bare **`sh-5.2$`** prompt with no user, host or directory is **normal and harmless** in a Session Manager session, and it does *not* mean you are the wrong user or in the wrong place. Session Manager starts its shell with `PS1` unset, and Amazon Linux only sets a prompt when `PS1` is already non-empty - so bash falls back to its built-in `\s-\v\$`, which prints as `sh-5.2$`. Confirm where you actually are rather than trusting the prompt:
+
+```bash
+whoami && pwd
+```
+<!-- source: course_outline_v3.md §"Lab 0" -->
+
+If that returns `ec2-user` and the `lab_env_student` path, you are fine - carry on. (Your instructor can set a proper prompt for everyone; it is cosmetic.) Tell your instructor if `whoami` says `ssm-user`, though - that one is a real Session Manager preference to fix, not something you should work around every session.
+
+### `verify.sh` reports `WARN: no log streams in /io106/…/flowlogs-…`
+
+Expected, and not a failure - the script says so itself. VPC Flow Logs take up to about **10 minutes** to deliver their first batch after an apply. Everything else should PASS. Re-run `./verify.sh` later and it becomes a PASS on its own; Lab 4 depends on those records existing, so it is worth confirming before you get there.
 
 ---
 
