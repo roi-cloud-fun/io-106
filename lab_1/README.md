@@ -75,6 +75,96 @@ By the end of this lab, you will:
 3. **Capture** the probe values you will use repeatedly:
 
     ```bash
+    REGION=$(terraform output -raw region)
+    A_ID=$(terraform output -raw spoke_a_instance_id)
+    B_IP=$(terraform output -raw spoke_b_instance_private_ip)
+    echo "region: $REGION   spoke A instance: $A_ID   spoke B IP: $B_IP"
+    ```
+    <!-- source: course_outline_v3.md §"Lab 1" -->
+
+    > **Capture `$REGION` and pass it to every `aws` command.** Your deploy box
+    > may well be in a **different region** from the stack you just deployed -
+    > that is normal, and it is how a real management host usually sits. The AWS
+    > CLI on an EC2 instance falls back to **that instance's own region** (via
+    > IMDS) whenever you do not pass `--region` and have not exported one. So a
+    > command with no `--region` silently asks the *wrong* region about your
+    > resources, and AWS answers truthfully that it cannot find them. Passing
+    > `--region "$REGION"` makes every command correct no matter which shell,
+    > user, or box you are on. You can check what the CLI would use with:
+    >
+    > ```bash
+    > aws configure list | grep region     # watch the right-hand "imds" / "env" source
+    > ```
+
+**Expected Result:** Apply completes with `1 destroyed`. The `$REGION`, `$A_ID` and `$B_IP` variables hold your region, your spoke A instance ID, and spoke B's private IP.
+
+---
+
+## Task 3: Reproduce the Symptom
+
+4. **Open** a Session Manager shell on the spoke A instance:
+
+    ```bash
+    aws ssm start-session --target "$A_ID" --region "$REGION"
+    ```
+    <!-- source: course_outline_v3.md §"Lab 1" -->
+
+5. **From inside the session**, try to reach spoke B. `$B_IP` does **not** exist in here - a Session Manager session is a new shell on a different machine - so type the address Task 2 printed. `<SPOKE_B_IP>` is a placeholder; pasting it unchanged fails with `Name or service not known`:
+
+    ```bash
+    # inside the spoke A session
+    ping -c 4 -W 2 <SPOKE_B_IP>    # -c 4 = 4 packets then stop; -W 2 = give up after 2s per packet
+    exit
+    ```
+    <!-- source: course_outline_v3.md §"Lab 1" -->
+
+**Expected Result:** The ping times out - 100% packet loss, no replies. This is the developer's "it just hangs." Note that the symptom alone does not tell you whether a route, a security group, or the instance is at fault. The next task settles that.
+
+---
+
+## Task 4: Diagnose with Reachability Analyzer
+
+Reachability Analyzer evaluates the *configured* path - routes, security groups, attachments - without sending a packet, and tells you the first hop that blocks it. It is the fastest way to separate "no route" from "blocked by SG."
+
+6. **Open** the AWS console and navigate to **Network Manager > Reachability Analyzer**. (AWS moved this tool out of the VPC console - if you look for it under VPC you will not find it.)
+
+7. **Click** **Create and analyze path**, then set:
+    - **Name:** `io106-<your_id>-a-to-b` - the account is shared across all students, so name your path with your student id (the same `io106-<student_id>-` convention as every other resource) or you will not be able to find yours among the others.
+    - **Source type:** Instance, **Source:** your spoke A instance (`io106-<id>-spoke-a`).
+    - **Destination type:** Instance, **Destination:** your spoke B instance (`io106-<id>-spoke-b`).
+    - **Protocol:** TCP. Reachability Analyzer paths accept only **TCP or UDP - not ICMP**. A missing route blocks every protocol, so TCP proves the routing fault just as well.
+
+8. **Click** **Create and analyze path** and wait for the analysis to complete (a few seconds to a minute). When it finishes, **open the analysis and read it in detail - do not stop at the top-line verdict.** Expand the **path details**: Reachability Analyzer lays out the forward path hop by hop - the source instance's network interface, its security group, spoke A's route table, the TGW attachment, and onward to the destination - and marks the **status** of each component. Read down the hops to the point where the path **stops**, and read the **explanation** shown at that hop.
+
+**Expected Result:** The path returns **Not reachable**. Walking the hop-by-hop detail, every component is green until **spoke A's route table**, where the path stops - the explanation there says there is **no route to the destination CIDR in the source route table**. Note what the path does *not* reach: it never gets to the TGW, spoke B's ENI, or any security group. The analyzer points squarely at spoke A's route table. That distinction is the whole diagnosis: a security-group fault would instead show the packet reaching spoke B's ENI and being rejected *there*; here it never leaves spoke A.
+
+---
+
+## Task 5: Corroborate with the Route Table and Flow Logs
+
+A good engineer confirms the tool's verdict against the resource itself.
+
+9. **Inspect** spoke A's route table directly - **back on the deploy box.** If you are still inside the spoke A session from Task 3, `exit` first:
+
+    ```bash
+    exit            # ONLY if you are still in the spoke A session
+    whoami && pwd   # expect ec2-user and .../lab_env_student
+    ```
+    <!-- source: course_outline_v3.md §"Lab 1" -->
+
+> [!CAUTION]
+> **This command must run on the deploy box, not inside a spoke instance.**
+> Run it inside a spoke and it **hangs and then times out** - it does not say
+> "denied". The spoke VPCs are fully private and have only the `ssm`,
+> `ec2messages` and `ssmmessages` endpoints, so there is no route to the EC2 API
+> at all, and the spoke instance role carries only `AmazonSSMManagedInstanceCore`
+> anyway. A timeout here means you are in the wrong shell. (That is the
+> PrivateLink design working: the instance can be *managed* over SSM without
+> being able to reach the control plane itself.)
+
+    Derive everything from your own state, so there is no student id to substitute and no region to guess - both of which silently return **empty output** rather than an error:
+
+    ```bash
     # 1. your own region and spoke A instance, straight out of Terraform state
     REGION=$(terraform output -raw region)
     A_ID=$(terraform output -raw spoke_a_instance_id)
