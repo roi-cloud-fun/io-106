@@ -46,7 +46,7 @@ By the end of this lab, you will:
 
 ## Task 1: Exercise the Healthy Pattern First
 
-> **Where you run everything in this lab.** All `terraform`, `verify.sh`, `aws sts`, `aws iam`, and `aws cloudtrail` commands run on your **deploy box** (`io106-<your_id>-deploy`), from the Terraform module directory `~/io-106/lab_environment/lab_env_student`. This lab leans heavily on shell variables (`$NETOPS_ARN`, `$A_ID`, `$B_ID`, and the exported `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` assumed-role credentials) - **none of which survive an SSM timeout.** If your session drops mid-lab, reconnect (**Systems Manager > Session Manager > Start session** on `io106-<your_id>-deploy`), then `cd` back and **re-run the capture block in step 1** (and re-assume the role) before continuing:
+> **Where you run everything in this lab.** All `terraform`, `verify.sh`, `aws sts`, `aws iam`, and `aws cloudtrail` commands run on your **deploy box** (`io106-<your_id>-deploy`), from the Terraform module directory `~/io-106/lab_environment/lab_env_student`. This lab uses shell variables (`$REGION`, `$NETOPS_ARN`, `$A_ID`, `$B_ID`) that do **not** survive an SSM timeout. If your session drops mid-lab, reconnect (**Systems Manager > Session Manager > Start session** on `io106-<your_id>-deploy`), then re-run the capture block in step 1. The `netops` profile you create in step 2 is written to `~/.aws/config` on disk, so that part *does* survive a reconnect - you do not have to re-assume the role:
 >
 > ```bash
 > cd ~/io-106/lab_environment/lab_env_student
@@ -57,7 +57,8 @@ Before you break it, see the role doing real work so the failure is unmistakable
 1. **Confirm the healthy baseline and capture what you need.** Your deploy box logs you straight into the module directory, so there is nothing to `cd` into unless you wandered off (the note above has the path if you need it):
 
     ```bash
-    bash ./verify.sh                                              # expect ALL CHECKS PASSED
+    bash ./verify.sh
+    REGION=$(terraform output -raw region)
     NETOPS_ARN=$(terraform output -raw network_operations_role_arn)
     ROLE_NAME=$(basename "$NETOPS_ARN")
     A_ID=$(terraform output -raw spoke_a_instance_id)
@@ -65,25 +66,57 @@ Before you break it, see the role doing real work so the failure is unmistakable
     ```
     <!-- source: course_outline_v3.md §"Lab 2" -->
 
-2. **Assume** the network-operations role and run a real diagnostic under it: create a Reachability Analyzer path between your two spoke instances. Export the temporary credentials into your shell first:
+2. **Assume** the network-operations role and run a real diagnostic under it: create a Reachability Analyzer path between your two spoke instances.
+
+    First, see the mechanics directly. `sts assume-role` returns a **temporary** credential set - an `ASIA...` access key, a secret, and a session token - which expire (an hour here, set by the role's `max_session_duration`). These are *not* long-lived keys, and you hold no stored secret anywhere: the `assume-role` call itself is authenticated by your deploy box's own instance role.
 
     ```bash
-    CREDS=$(aws sts assume-role --role-arn "$NETOPS_ARN" --role-session-name netops \
-      --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text)
-    export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | cut -f1)
-    export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | cut -f2)
-    export AWS_SESSION_TOKEN=$(echo "$CREDS" | cut -f3)
+    aws sts assume-role --role-arn "$NETOPS_ARN" --role-session-name netops --query 'Credentials.{Key:AccessKeyId,Expires:Expiration}' --output table
+    ```
+    <!-- source: https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html -->
 
-    aws ec2 describe-route-tables --query 'length(RouteTables)'                       # READ: works
-    PID=$(aws ec2 create-network-insights-path --source "$A_ID" --destination "$B_ID" \
-      --protocol tcp --query 'NetworkInsightsPath.NetworkInsightsPathId' --output text) # Reachability Analyzer: works
-    echo "created $PID"
-    aws ec2 delete-network-insights-path --network-insights-path-id "$PID"             # tidy up
-    unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN                     # back to your identity
+    Note the `ASIA` prefix (temporary) rather than `AKIA` (long-lived IAM user key), and the expiry timestamp. That is the whole point of role assumption: credentials that are scoped, attributable to a session name, and self-expiring.
+
+    Now configure the role as a **named profile** and use that for the rest of the lab. This is how a jump box is really set up, and it avoids exporting credentials into your shell at all:
+
+    ```bash
+    mkdir -p ~/.aws
+    grep -q '^\[profile netops\]' ~/.aws/config 2>/dev/null || printf '[profile netops]
+role_arn = %s
+credential_source = Ec2InstanceMetadata
+region = %s
+' "$NETOPS_ARN" "$REGION" >> ~/.aws/config
+    aws --profile netops sts get-caller-identity --query Arn --output text
+    ```
+    <!-- source: https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html -->
+
+    `credential_source = Ec2InstanceMetadata` tells the CLI to authenticate with the instance role and then assume `role_arn` for you - refreshing the temporary credentials automatically as they expire. Expect the ARN to come back as `assumed-role/io106-<your_id>-network-operations/botocore-session-...`.
+
+    Run the diagnostic under the role:
+
+    ```bash
+    aws --profile netops ec2 describe-route-tables --query 'length(RouteTables)' --output text
+    ```
+    <!-- source: facts_extracted_v2.md §"Cross-Account IAM Roles" -->
+
+    ```bash
+    aws --profile netops ec2 create-network-insights-path --source "$A_ID" --destination "$B_ID" --protocol tcp --query 'NetworkInsightsPath.NetworkInsightsPathId' --output text
     ```
     <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
 
-**Expected Result:** The `assume-role` returns temporary `ASIA...` credentials. Under them, both the `describe` and the `create-network-insights-path` succeed - the role can list the network *and* run Reachability Analyzer. (Reachability Analyzer paths only accept `tcp` or `udp`, not `icmp`.) Remember to `unset` the variables so your shell returns to your own identity.
+    Both succeed - the role can list the network **and** run Reachability Analyzer.
+
+    > **Why the profile, not `export AWS_ACCESS_KEY_ID=...`?** Exported credentials
+    > are invisible state. They do not survive an SSM reconnect, so a dropped
+    > session silently returns you to your own identity mid-investigation; and if
+    > you forget to `unset` them, the next `terraform apply` runs as a read-only
+    > role and fails with a wall of `AccessDenied` (Lab 4 has a callout for exactly
+    > that). `--profile netops` is explicit on every command: you can always see
+    > which identity a command used by reading the command itself, and there is
+    > nothing to unset.
+    <!-- source: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp.html -->
+
+**Expected Result:** `assume-role` shows an `ASIA...` key with an expiry, and `--profile netops` reports the `assumed-role/io106-<your_id>-network-operations/...` ARN. Under that profile both the `describe` and the `create-network-insights-path` succeed - the role can list the network *and* run Reachability Analyzer. (Reachability Analyzer paths only accept `tcp` or `udp`, not `icmp`.) Because nothing was exported, your own identity is still what any command *without* `--profile netops` uses - there is nothing to unset.
 
 > **If `assume-role` itself returns `AccessDenied`:** your deploy box's own instance role is missing `sts:AssumeRole` on the network-operations role. That is a deploy-box setup issue, not part of the lab - raise it with your instructor before continuing.
 
@@ -107,23 +140,31 @@ Before you break it, see the role doing real work so the failure is unmistakable
 
 ## Task 3: Reproduce the Symptom
 
-4. **Assume** the role again and try the same two calls as in Task 1:
+4. **Run the same two calls as in Task 1**, under the same `netops` profile. Re-derive the ids first in case you reconnected:
 
     ```bash
-    NETOPS_ARN=$(terraform output -raw network_operations_role_arn)   # re-derive Task 1's vars in case you reconnected
+    REGION=$(terraform output -raw region)
     A_ID=$(terraform output -raw spoke_a_instance_id)
     B_ID=$(terraform output -raw spoke_b_instance_id)
-    CREDS=$(aws sts assume-role --role-arn "$NETOPS_ARN" --role-session-name netops \
-      --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text)
-    export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | cut -f1)
-    export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | cut -f2)
-    export AWS_SESSION_TOKEN=$(echo "$CREDS" | cut -f3)
+    echo "region=$REGION A=$A_ID B=$B_ID"
+    ```
+    <!-- source: course_outline_v3.md §"Lab 2" -->
 
-    aws ec2 describe-route-tables --query 'length(RouteTables)'                        # still works
-    aws ec2 create-network-insights-path --source "$A_ID" --destination "$B_ID" --protocol tcp  # now DENIED
-    unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+    The read still works:
+
+    ```bash
+    aws --profile netops ec2 describe-route-tables --query 'length(RouteTables)' --output text
+    ```
+    <!-- source: facts_extracted_v2.md §"Cross-Account IAM Roles" -->
+
+    Reachability Analyzer is now refused:
+
+    ```bash
+    aws --profile netops ec2 create-network-insights-path --source "$A_ID" --destination "$B_ID" --protocol tcp
     ```
     <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
+
+    Note what did **not** happen: the role assumption itself still succeeded. The profile resolved, the identity is still the `network-operations` role, and a read-only call still returns data. Only this one action is blocked - which is exactly why the failure is confusing in the field and why the next task goes looking for a guardrail rather than a broken role.
 
 **Expected Result:** The assume-role *still succeeds* and the `describe` *still works* - but `create-network-insights-path` now fails with:
 
@@ -249,27 +290,16 @@ permissions_boundary = local.is_lab2 ? aws_iam_policy.netops_boundary.arn : null
 
 ## Task 7: Re-Verify
 
-13. **Assume** the role and re-run Reachability Analyzer - it should work again:
+13. **Re-run Reachability Analyzer under the role** - it should work again:
 
     ```bash
-    NETOPS_ARN=$(terraform output -raw network_operations_role_arn)   # re-derive Task 1's vars in case you reconnected
     A_ID=$(terraform output -raw spoke_a_instance_id)
     B_ID=$(terraform output -raw spoke_b_instance_id)
-    CREDS=$(aws sts assume-role --role-arn "$NETOPS_ARN" --role-session-name netops \
-      --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text)
-    export AWS_ACCESS_KEY_ID=$(echo "$CREDS" | cut -f1)
-    export AWS_SECRET_ACCESS_KEY=$(echo "$CREDS" | cut -f2)
-    export AWS_SESSION_TOKEN=$(echo "$CREDS" | cut -f3)
-
-    PID=$(aws ec2 create-network-insights-path --source "$A_ID" --destination "$B_ID" \
-      --protocol tcp --query 'NetworkInsightsPath.NetworkInsightsPathId' --output text)
-    echo "Reachability Analyzer works again: $PID"
-    aws ec2 delete-network-insights-path --network-insights-path-id "$PID"
-    unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+    aws --profile netops ec2 create-network-insights-path --source "$A_ID" --destination "$B_ID" --protocol tcp --query 'NetworkInsightsPath.NetworkInsightsPathId' --output text
     ```
     <!-- source: facts_extracted_v2.md §"VPC Reachability Analyzer" -->
 
-**Expected Result:** `create-network-insights-path` now returns a `nip-...` id instead of `UnauthorizedOperation`. The cap is gone; the role's policy is back in full effect. Remember to `unset` the assumed credentials.
+**Expected Result:** `create-network-insights-path` now returns a `nip-...` id instead of `UnauthorizedOperation`. The cap is gone; the role's policy is back in full effect.
 
 ---
 
@@ -336,3 +366,6 @@ In **Lab 3: Private Connectivity - Endpoints and DNS**, you return to the data p
 - [How IAM evaluates effective permissions](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html)
 - [VPC Reachability Analyzer](https://docs.aws.amazon.com/vpc/latest/reachability/what-is-reachability-analyzer.html)
 - [CloudTrail Event history](https://docs.aws.amazon.com/awscloudtrail/latest/userguide/view-cloudtrail-events.html)
+- [STS AssumeRole API reference](https://docs.aws.amazon.com/STS/latest/APIReference/API_AssumeRole.html) - what the temporary credential set contains and how long it lasts
+- [Use an IAM role in the AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html) - `role_arn` + `credential_source` named profiles, the pattern used in Task 1
+- [Temporary security credentials in IAM](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp.html) - why `ASIA...` credentials expire and why that is preferable to long-lived keys
